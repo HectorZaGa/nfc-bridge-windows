@@ -10,8 +10,16 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
+    let is_portable = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|dir| dir.join("portable.dat").exists() || dir.join("nfc-bridge.json").exists()))
+        .unwrap_or(false);
+
     println!("==================================================");
     println!("          NFC Bridge Tools - Windows Pro          ");
+    if is_portable {
+        println!("             [ MODO PORTABLE ACTIVO ]             ");
+    }
     println!("==================================================");
     println!(" [1] Monitor de APDUs en tiempo real");
     println!(" [2] Comprobar lectores PC/SC del sistema");
@@ -20,7 +28,6 @@ async fn main() -> Result<()> {
     println!("==================================================");
 
     info!("Iniciando suite de herramientas avanzadas...");
-    // Demo de frame de diagnóstico
     let test_frame = NfcBridgeFrame::new(
         MessageType::ReaderStatus,
         1,
