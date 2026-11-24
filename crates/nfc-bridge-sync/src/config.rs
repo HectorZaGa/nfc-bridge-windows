@@ -26,7 +26,7 @@ impl Default for AppConfig {
             is_portable,
             data_dir,
             pc_name,
-            tcp_port: 8765,
+            tcp_port: 45362,
             auto_usb_priority: true,
             autostart_with_windows: false,
         }

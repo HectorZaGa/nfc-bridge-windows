@@ -11,7 +11,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{error, info, warn};
 
-pub const DEFAULT_TCP_PORT: u16 = 8765;
+pub const DEFAULT_TCP_PORT: u16 = 45362;
 
 pub struct BridgeSyncServer {
     port: u16,
