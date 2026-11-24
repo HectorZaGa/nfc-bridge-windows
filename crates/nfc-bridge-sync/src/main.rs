@@ -10,8 +10,32 @@ fn get_local_ip() -> Option<String> {
     socket.local_addr().ok().map(|addr| addr.ip().to_string())
 }
 
-fn configure_adb_reverse(port: u16, active_devices: &mut std::collections::HashSet<String>) {
+fn run_adb_hidden(candidate: &std::path::Path, args: &[&str]) -> std::io::Result<std::process::Output> {
+    let mut cmd = std::process::Command::new(candidate);
+    cmd.args(args);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.output()
+}
+
+fn configure_adb_reverse(
+    port: u16,
+    active_devices: &mut std::collections::HashSet<String>,
+    unauthorized_devices: &mut std::collections::HashSet<String>,
+    warned_missing_adb: &mut bool,
+) {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_default();
+
     let adb_candidates = [
+        exe_dir.join("adb.exe"),
+        exe_dir.join("platform-tools").join("adb.exe"),
         std::path::PathBuf::from("adb"),
         std::env::var("LOCALAPPDATA")
             .map(|l| std::path::PathBuf::from(l).join(r"Android\Sdk\platform-tools\adb.exe"))
@@ -25,30 +49,46 @@ fn configure_adb_reverse(port: u16, active_devices: &mut std::collections::HashS
     ];
 
     let reverse_arg = format!("tcp:{}", port);
+    let mut found_adb = false;
     for candidate in &adb_candidates {
         if candidate.as_os_str().is_empty() {
             continue;
         }
         if candidate == &std::path::PathBuf::from("adb") || candidate.exists() {
             // 1. Obtener la lista de dispositivos conectados y autorizados
-            let devices_output = std::process::Command::new(candidate)
-                .args(["devices"])
-                .output();
-
-            let Ok(dev_out) = devices_output else { continue; };
+            let Ok(dev_out) = run_adb_hidden(candidate, &["devices"]) else { continue; };
             if !dev_out.status.success() { continue; };
+            found_adb = true;
 
             let stdout_str = String::from_utf8_lossy(&dev_out.stdout);
             let mut current_connected = std::collections::HashSet::new();
+            let mut current_unauthorized = std::collections::HashSet::new();
 
             for line in stdout_str.lines().skip(1) {
                 let trimmed = line.trim();
-                if trimmed.ends_with("device") {
-                    if let Some(serial) = trimmed.split_whitespace().next() {
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let mut parts = trimmed.split_whitespace();
+                let Some(serial) = parts.next() else { continue; };
+                let Some(state) = parts.next() else { continue; };
+                match state {
+                    "device" => {
                         current_connected.insert(serial.to_string());
                     }
+                    "unauthorized" => {
+                        current_unauthorized.insert(serial.to_string());
+                        if !unauthorized_devices.contains(serial) {
+                            tracing::warn!(
+                                "Dispositivo USB [{}] detectado pero sin autorizar: acepta 'Depuración por USB' en la pantalla del teléfono.",
+                                serial
+                            );
+                        }
+                    }
+                    _ => {}
                 }
             }
+            *unauthorized_devices = current_unauthorized;
 
             // Notificar dispositivos desconectados
             active_devices.retain(|d| {
@@ -62,23 +102,27 @@ fn configure_adb_reverse(port: u16, active_devices: &mut std::collections::HashS
             // Configurar reverse para cada dispositivo nuevo conectado
             for serial in &current_connected {
                 if !active_devices.contains(serial) {
-                    let output = std::process::Command::new(candidate)
-                        .args(["-s", serial, "reverse", &reverse_arg, &reverse_arg])
-                        .output();
-
-                    if let Ok(out) = output {
+                    if let Ok(out) = run_adb_hidden(candidate, &["-s", serial, "reverse", &reverse_arg, &reverse_arg]) {
                         if out.status.success() {
                             tracing::info!(
                                 "ADB Reverse activado con éxito en [{}] : {} -> {} (cable USB listo para Android)",
                                 serial, reverse_arg, reverse_arg
                             );
                             active_devices.insert(serial.clone());
+                        } else {
+                            let err = String::from_utf8_lossy(&out.stderr);
+                            tracing::warn!("Error al activar ADB Reverse en [{}]: {}", serial, err.trim());
                         }
                     }
                 }
             }
             return;
         }
+    }
+
+    if !found_adb && !*warned_missing_adb {
+        *warned_missing_adb = true;
+        tracing::warn!("No se encontró adb.exe en PATH ni en Android SDK; el túnel USB ADB Reverse no estará disponible hasta instalar platform-tools.");
     }
 }
 
@@ -141,9 +185,11 @@ async fn main() -> Result<()> {
     let port = config.tcp_port;
     tokio::spawn(async move {
         let mut active_devices = std::collections::HashSet::new();
+        let mut unauthorized_devices = std::collections::HashSet::new();
+        let mut warned_missing_adb = false;
         loop {
-            configure_adb_reverse(port, &mut active_devices);
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            configure_adb_reverse(port, &mut active_devices, &mut unauthorized_devices, &mut warned_missing_adb);
+            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
         }
     });
 
