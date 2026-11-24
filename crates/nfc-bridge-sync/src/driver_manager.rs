@@ -64,25 +64,31 @@ impl DriverManager {
         {
             use std::fs::OpenOptions;
             let pipes = [DRIVER_NAMED_PIPE, ALT_DRIVER_NAMED_PIPE];
-            let mut any_stopped = false;
 
             for pipe in pipes {
                 match OpenOptions::new().read(true).write(true).open(pipe) {
                     Ok(_) => return DriverStatus::Running,
                     Err(e) => {
                         let raw_code = e.raw_os_error().unwrap_or(0);
-                        if raw_code != 2 {
-                            any_stopped = true;
+                        // ERROR_PIPE_BUSY (231) indica que el Named Pipe del driver sí existe y está activo
+                        if raw_code == 231 {
+                            return DriverStatus::Running;
                         }
                     }
                 }
             }
 
-            if any_stopped {
-                DriverStatus::InstalledStopped
-            } else {
-                DriverStatus::NotInstalled
+            // Si el pipe no está abierto, verificar si el servicio está instalado en Windows
+            if let Ok(out) = std::process::Command::new("sc.exe")
+                .args(["query", "NfcBridgeDriver"])
+                .output()
+            {
+                if out.status.success() {
+                    return DriverStatus::InstalledStopped;
+                }
             }
+
+            DriverStatus::NotInstalled
         }
         #[cfg(not(target_os = "windows"))]
         {

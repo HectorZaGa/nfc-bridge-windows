@@ -1,156 +1,163 @@
-//! # Bridge Sync Server
+//! # Driver IPC Client (Named Pipe)
 //!
-//! Servidor TCP asíncrono que escucha conexiones de la aplicación Android NFC Bridge
-//! en el puerto 8765 y gestiona el handshake y la transferencia de tramas BAP.
+//! `nfc-bridge-sync` NO abre puertos de red ni habla directamente con el celular.
+//! Toda la conectividad (TCP, UDP Auto-Discovery, USB AOA, Bluetooth, Wi-Fi Direct)
+//! y la emulación PC/SC residen exclusivamente en `nfc-bridge-driver`.
+//!
+//! Este módulo conecta la interfaz de escritorio con el driver a través del canal local
+//! `\\.\pipe\nfc_bridge_driver`.
 
-use anyhow::{Context, Result};
-use bytes::BytesMut;
-use core_proto::{FrameCodec, MessageType, NfcBridgeFrame};
-use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tracing::{error, info, warn};
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tracing::{info, warn};
 
-pub const DEFAULT_TCP_PORT: u16 = 45362;
+use crate::driver_manager::DRIVER_NAMED_PIPE;
 
-pub struct BridgeSyncServer {
-    port: u16,
-    pc_name: String,
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "command", content = "params")]
+pub enum IpcCommand {
+    GetStatus,
+    SetPaused { paused: bool },
+    SetUsbPriority { enabled: bool },
+    DisconnectDevice,
 }
 
-impl BridgeSyncServer {
-    pub fn new(pc_name: String, port: u16) -> Self {
-        Self { pc_name, port }
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "event", content = "data")]
+pub enum IpcEvent {
+    Status {
+        connected: bool,
+        device_name: Option<String>,
+        latency_ms: u64,
+        paused: bool,
+        tag_present: bool,
+        tag_uid: Option<String>,
+    },
+    DeviceConnected {
+        device_name: String,
+        endpoint: String,
+    },
+    DeviceDisconnected,
+    LatencyUpdated {
+        latency_ms: u64,
+    },
+    TagAttached {
+        uid: String,
+        technologies: Vec<String>,
+        is_ntag215: bool,
+    },
+    TagDetached,
+    Error {
+        message: String,
+    },
+}
+
+pub struct DriverIpcClient;
+
+impl DriverIpcClient {
+    pub fn new() -> Self {
+        Self
     }
 
-    pub async fn run(&self) -> Result<()> {
-        let addr = SocketAddr::from(([0, 0, 0, 0], self.port));
-        let listener = TcpListener::bind(addr)
-            .await
-            .with_context(|| format!("No se pudo enlazar el servidor TCP en {}", addr))?;
-
-        info!("NFC Bridge Sync escuchando conexiones en {}", addr);
-
-        // Iniciar responder UDP para auto-descubrimiento en la red local (Wi-Fi / LAN)
-        let udp_port = self.port;
-        let pc_name_udp = self.pc_name.clone();
-        tokio::spawn(async move {
-            if let Err(e) = Self::run_udp_discovery_responder(udp_port, pc_name_udp).await {
-                warn!("UDP discovery responder finalizó con error: {}", e);
-            }
-        });
+    /// Mantiene conexión IPC persistente con `nfc-bridge-driver`.
+    /// Si el driver no está iniciado, espera sin abrir ningún puerto de red alternativo.
+    pub async fn run_forever(&self) -> Result<()> {
+        let mut logged_waiting = false;
 
         loop {
-            match listener.accept().await {
-                Ok((socket, peer_addr)) => {
-                    info!("Nuevo dispositivo conectado desde {}", peer_addr);
-                    let pc_name = self.pc_name.clone();
-                    tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection(socket, peer_addr, pc_name).await {
-                            warn!("Conexión con {} terminada: {}", peer_addr, e);
-                        }
-                    });
+            match self.connect_and_stream().await {
+                Ok(()) => {
+                    logged_waiting = false;
+                    warn!("Conexión IPC con el driver cerrada. Reintentando enlace...");
                 }
-                Err(e) => {
-                    error!("Error al aceptar conexión TCP: {}", e);
+                Err(_) => {
+                    if !logged_waiting {
+                        logged_waiting = true;
+                        warn!(
+                            "Esperando a NFC Bridge Driver ({})... Sin el driver activo no es posible conectar por TCP, USB AOA, Bluetooth ni Wi-Fi Direct.",
+                            DRIVER_NAMED_PIPE
+                        );
+                    }
                 }
             }
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
     }
 
-    async fn handle_connection(
-        mut socket: TcpStream,
-        peer_addr: SocketAddr,
-        pc_name: String,
-    ) -> Result<()> {
-        let mut buffer = BytesMut::with_capacity(4096);
-        let mut seq_counter: u16 = 0;
+    async fn connect_and_stream(&self) -> Result<()> {
+        #[cfg(target_os = "windows")]
+        {
+            use tokio::net::windows::named_pipe::ClientOptions;
 
-        loop {
-            let n = socket.read_buf(&mut buffer).await?;
-            if n == 0 {
-                info!("El cliente {} cerró la conexión.", peer_addr);
-                break;
-            }
+            let client = ClientOptions::new().open(DRIVER_NAMED_PIPE)?;
+            info!("Enlazado con NFC Bridge Driver vía IPC ({})", DRIVER_NAMED_PIPE);
 
-            // Procesar todas las tramas completas presentes en el buffer
-            while let Some(frame) = FrameCodec::decode(&mut buffer)? {
-                seq_counter = seq_counter.wrapping_add(1);
-                match frame.message_type {
-                    MessageType::HelloSyn => {
-                        info!("Recibido HELLO_SYN de {}", peer_addr);
-                        let response_payload = format!(r#"{{"pc_name":"{}","status":"ready"}}"#, pc_name);
-                        let ack = NfcBridgeFrame::new(
-                            MessageType::HelloAck,
-                            seq_counter,
-                            bytes::Bytes::copy_from_slice(response_payload.as_bytes()),
-                        );
-                        let encoded = FrameCodec::encode(&ack);
-                        socket.write_all(&encoded).await?;
-                    }
-                    MessageType::Heartbeat => {
-                        let ack = NfcBridgeFrame::heartbeat_ack(seq_counter);
-                        let encoded = FrameCodec::encode(&ack);
-                        socket.write_all(&encoded).await?;
-                    }
-                    MessageType::TagAttached => {
-                        info!("Etiqueta NFC detectada por el cliente Android!");
-                    }
-                    MessageType::TagDetached => {
-                        info!("Etiqueta NFC retirada.");
-                    }
-                    MessageType::TransceiveResp => {
-                        info!("Respuesta APDU recibida ({} bytes)", frame.payload.len());
-                    }
-                    MessageType::Disconnect => {
-                        info!("Solicitud de desconexión recibida de {}", peer_addr);
-                        break;
-                    }
-                    _ => {
-                        // Otros tipos de trama
-                    }
+            let (reader, _writer) = tokio::io::split(client);
+            let mut lines = BufReader::new(reader).lines();
+
+            while let Ok(Some(line)) = lines.next_line().await {
+                if let Ok(event) = serde_json::from_str::<IpcEvent>(&line) {
+                    Self::handle_driver_event(event);
                 }
             }
-        }
 
-        Ok(())
+            Ok(())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            anyhow::bail!("Named Pipe IPC solo soportado en Windows");
+        }
     }
 
-    /// Tarea asíncrona de responder datagramas de descubrimiento UDP.
-    /// Responde a paquetes que contengan "NFC_BRIDGE_DISCOVERY" con los metadatos de la PC.
-    async fn run_udp_discovery_responder(port: u16, pc_name: String) -> Result<()> {
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
-        let socket = tokio::net::UdpSocket::bind(addr)
-            .await
-            .with_context(|| format!("No se pudo enlazar socket UDP en {}", addr))?;
-
-        info!("NFC Bridge Sync responder UDP activo en {} para auto-descubrimiento Wi-Fi", addr);
-
-        let mut buf = [0u8; 1024];
-        loop {
-            match socket.recv_from(&mut buf).await {
-                Ok((len, peer_addr)) => {
-                    let msg = String::from_utf8_lossy(&buf[..len]);
-                    if msg.contains("NFC_BRIDGE_DISCOVERY") {
-                        let pc_id = format!(
-                            "{:04X}{:04X}",
-                            core_proto::crc16::compute(pc_name.as_bytes()),
-                            core_proto::crc16::compute(&port.to_le_bytes())
-                        );
-                        let response = format!(
-                            r#"{{"id":"{}","name":"{}","port":{},"model":"WINDOWS","status":"ready"}}"#,
-                            pc_id, pc_name, port
-                        );
-                        if let Err(e) = socket.send_to(response.as_bytes(), peer_addr).await {
-                            warn!("Error al responder descubrimiento UDP a {}: {}", peer_addr, e);
-                        } else {
-                            info!("Descubrimiento Wi-Fi: respondido a {} (PC: '{}')", peer_addr, pc_name);
-                        }
-                    }
+    fn handle_driver_event(event: IpcEvent) {
+        match event {
+            IpcEvent::Status {
+                connected,
+                device_name,
+                latency_ms,
+                paused,
+                tag_present,
+                tag_uid,
+            } => {
+                if connected {
+                    info!(
+                        "[Driver] Estado: Conectado a '{}' ({} ms) | Pausado={} | Tag={:?}",
+                        device_name.unwrap_or_else(|| "Android".to_string()),
+                        latency_ms,
+                        paused,
+                        if tag_present { tag_uid } else { None }
+                    );
+                } else {
+                    info!("[Driver] Listo y en escucha (sin teléfono conectado aún).");
                 }
-                Err(e) => {
-                    warn!("Error al recibir datagrama UDP de descubrimiento: {}", e);
-                }
+            }
+            IpcEvent::DeviceConnected {
+                device_name,
+                endpoint,
+            } => {
+                info!("[Driver] Dispositivo Android conectado: '{}' vía {}", device_name, endpoint);
+            }
+            IpcEvent::DeviceDisconnected => {
+                info!("[Driver] Dispositivo Android desconectado.");
+            }
+            IpcEvent::TagAttached {
+                uid,
+                technologies,
+                is_ntag215,
+            } => {
+                info!(
+                    "[Driver] Etiqueta NFC detectada: UID={} | Techs={:?} | NTAG215={}",
+                    uid, technologies, is_ntag215
+                );
+            }
+            IpcEvent::TagDetached => {
+                info!("[Driver] Etiqueta NFC retirada del campo.");
+            }
+            IpcEvent::LatencyUpdated { .. } => {}
+            IpcEvent::Error { message } => {
+                warn!("[Driver Error] {}", message);
             }
         }
     }

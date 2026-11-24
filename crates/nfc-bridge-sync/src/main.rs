@@ -1,7 +1,7 @@
 use anyhow::Result;
-use nfc_bridge_sync::{AppConfig, BridgeSyncServer, DriverManager, DriverStatus, EmbeddedUi};
+use nfc_bridge_sync::{AppConfig, DriverIpcClient, DriverManager, DriverStatus, EmbeddedUi};
 use std::net::UdpSocket;
-use tracing::{info, Level};
+use tracing::{info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 fn get_local_ip() -> Option<String> {
@@ -27,9 +27,8 @@ async fn main() -> Result<()> {
     }
     println!("==================================================");
     println!(" [IP de esta PC] : {}", local_ip);
-    println!(" [Puerto TCP]    : {}", config.tcp_port);
-    println!(" [Endpoint móvil]: {}:{}", local_ip, config.tcp_port);
-    println!(" [Transporte USB]: AOA Nativo vía NFC Bridge Driver");
+    println!(" [Identidad PC]  : {}", config.pc_name);
+    println!(" [Arquitectura]  : Cliente Visual IPC -> Driver");
     println!("==================================================");
 
     info!("Directorio de datos: {:?}", config.data_dir);
@@ -41,12 +40,20 @@ async fn main() -> Result<()> {
     let driver_mgr = DriverManager::new();
     let mut status = driver_mgr.check_driver_status();
 
+    if status == DriverStatus::InstalledStopped {
+        info!("Servicio NFC Bridge Driver instalado pero detenido. Intentando iniciar...");
+        let _ = std::process::Command::new("sc.exe")
+            .args(["start", "NfcBridgeDriver"])
+            .output();
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        status = driver_mgr.check_driver_status();
+    }
+
     if status == DriverStatus::NotInstalled {
         if let Some(local_driver) = driver_mgr.find_local_driver_binary() {
-            info!("Driver no detectado en el sistema, pero se encontró binario local en {:?}.", local_driver);
-            info!("Iniciando driver virtual silenciosamente en segundo plano...");
+            info!("Driver no activo, iniciando binario local silencioso {:?}...", local_driver);
             if let Ok(_child) = driver_mgr.start_local_driver_background(&local_driver) {
-                std::thread::sleep(std::time::Duration::from_millis(500));
+                std::thread::sleep(std::time::Duration::from_millis(600));
                 status = driver_mgr.check_driver_status();
             }
         }
@@ -54,20 +61,19 @@ async fn main() -> Result<()> {
 
     match status {
         DriverStatus::Running => {
-            info!("Driver Virtual PC/SC + USB AOA detectado y activo (Named Pipe listo).");
+            info!("NFC Bridge Driver detectado y activo (TCP 45362, UDP Discovery, USB AOA y PC/SC bajo control del driver).");
         }
         DriverStatus::InstalledStopped => {
-            info!("Driver instalado pero el canal Named Pipe está inactivo.");
+            warn!("NFC Bridge Driver está instalado pero detenido. No habrá conexión hasta iniciarlo.");
         }
         DriverStatus::NotInstalled => {
-            info!("Driver no detectado. El instalador o paquete completo incluye el driver PC/SC y USB AOA.");
+            warn!("DRIVER NO DETECTADO: Instala o inicia `nfc-bridge-driver` para habilitar conexiones (TCP, USB AOA, Bluetooth, Wi-Fi Direct).");
         }
     }
 
-    info!("Identidad de esta PC: {}", config.pc_name);
-
-    let server = BridgeSyncServer::new(config.pc_name, config.tcp_port);
-    server.run().await?;
+    // Conectarse exclusivamente al driver vía Named Pipe IPC (nunca abre puertos de red por su cuenta)
+    let ipc_client = DriverIpcClient::new();
+    ipc_client.run_forever().await?;
 
     Ok(())
 }
