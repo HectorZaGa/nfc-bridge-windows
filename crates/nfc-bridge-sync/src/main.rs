@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
-    let config = AppConfig::default();
+    let config = AppConfig::load_or_default();
     let local_ip = get_local_ip().unwrap_or_else(|| "127.0.0.1".to_string());
 
     println!("==================================================");
@@ -110,17 +110,29 @@ async fn main() -> Result<()> {
     );
 
     let driver_mgr = DriverManager::new();
-    let status = driver_mgr.check_driver_status();
+    let mut status = driver_mgr.check_driver_status();
+
+    if status == DriverStatus::NotInstalled {
+        if let Some(local_driver) = driver_mgr.find_local_driver_binary() {
+            info!("Driver no detectado en el sistema, pero se encontró binario local en {:?}.", local_driver);
+            info!("Iniciando driver virtual silenciosamente en segundo plano...");
+            if let Ok(_child) = driver_mgr.start_local_driver_background(&local_driver) {
+                // Dar tiempo breve para que el pipe se inicialice
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                status = driver_mgr.check_driver_status();
+            }
+        }
+    }
 
     match status {
         DriverStatus::Running => {
-            info!("Driver Virtual PC/SC detectado y activo.");
+            info!("Driver Virtual PC/SC detectado y activo (Named Pipe listo).");
         }
         DriverStatus::InstalledStopped => {
             info!("Driver instalado pero el canal Named Pipe está inactivo.");
         }
         DriverStatus::NotInstalled => {
-            info!("Driver no detectado. Puede descargarse la última versión desde GitHub.");
+            info!("Driver no detectado. El instalador o versión completa incluye el driver PC/SC.");
         }
     }
 

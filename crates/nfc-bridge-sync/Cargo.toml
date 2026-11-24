@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+default = []
+portable = []
+
 [dependencies]
 core-proto = { workspace = true }
 tokio = { workspace = true }

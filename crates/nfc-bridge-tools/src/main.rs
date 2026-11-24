@@ -10,9 +10,16 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
-    let is_portable = std::env::current_exe()
+    let is_portable = cfg!(feature = "portable") || std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|dir| dir.join("portable.dat").exists() || dir.join("nfc-bridge.json").exists()))
+        .map(|p| {
+            let in_dir = p.parent().map(|dir| dir.join("portable.dat").exists() || dir.join("nfc-bridge.json").exists()).unwrap_or(false);
+            let in_name = p.file_name().and_then(|n| n.to_str()).map(|n| {
+                let lower = n.to_lowercase();
+                lower.contains("portable") || lower.ends_with("p.exe")
+            }).unwrap_or(false);
+            in_dir || in_name
+        })
         .unwrap_or(false);
 
     println!("==================================================");
