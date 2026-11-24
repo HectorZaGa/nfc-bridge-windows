@@ -1,11 +1,11 @@
 ﻿<#
 .SYNOPSIS
-    Script automatizado de compilación multi-arquitectura y empaquetado para NFC Bridge Windows.
+    Script automatizado de compilación multi-arquitectura para NFC Bridge Windows (Sync & Tools).
     Genera binarios optimizados para:
     - x64 (x86_64)
     - x86 (32 bits)
     - arm64 (aarch64)
-    - Portable (-portable.exe con feature 'portable' embebida)
+    - Portable (-portable.exe con feature 'portable' embebida, inmune a renombrado)
     - Sumas de verificación SHA-256 (.sha256)
 #>
 
@@ -18,14 +18,12 @@ param(
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $WindowsRepoDir = Resolve-Path (Join-Path $ScriptDir "..")
-$DriverRepoDir = Resolve-Path (Join-Path $WindowsRepoDir "..\nfc-bridge-driver")
 $DistDir = Join-Path $WindowsRepoDir "dist"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "    NFC BRIDGE WINDOWS - BUILD MULTI-ARQUITECTURA v$Version" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "Repositorio Windows: $WindowsRepoDir"
-Write-Host "Repositorio Driver:  $DriverRepoDir"
 Write-Host "Directorio de Salida: $DistDir"
 Write-Host ""
 
@@ -34,7 +32,6 @@ if (Test-Path $DistDir) {
 }
 New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
 
-# Función para calcular y guardar hash SHA256
 function Generate-Checksum {
     param([string]$FilePath)
     $hash = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
@@ -65,22 +62,11 @@ Copy-Item $toolsX64Src $toolsX64Dst -Force
 $checksumList += Generate-Checksum $syncX64Dst
 $checksumList += Generate-Checksum $toolsX64Dst
 
-Write-Host "  -> Creado: $(Split-Path -Leaf $syncX64Dst) ($( (Get-Item $syncX64Dst).Length / 1MB ) MB)"
-Write-Host "  -> Creado: $(Split-Path -Leaf $toolsX64Dst) ($( (Get-Item $toolsX64Dst).Length / 1MB ) MB)"
-
-# Compilar Driver x64
-if (Test-Path $DriverRepoDir) {
-    Set-Location $DriverRepoDir
-    cargo build --release
-    $driverX64Src = Join-Path $DriverRepoDir "target\release\nfc-bridge-driver.exe"
-    $driverX64Dst = Join-Path $DistDir "nfc-bridge-driver-$Version-x64.exe"
-    Copy-Item $driverX64Src $driverX64Dst -Force
-    $checksumList += Generate-Checksum $driverX64Dst
-    Write-Host "  -> Creado: $(Split-Path -Leaf $driverX64Dst) ($( (Get-Item $driverX64Dst).Length / 1MB ) MB)"
-}
+Write-Host "  -> Creado: $(Split-Path -Leaf $syncX64Dst) ($( [math]::Round((Get-Item $syncX64Dst).Length / 1MB, 2) ) MB)"
+Write-Host "  -> Creado: $(Split-Path -Leaf $toolsX64Dst) ($( [math]::Round((Get-Item $toolsX64Dst).Length / 1MB, 2) ) MB)"
 
 # -------------------------------------------------------------
-# 2. Compilación Edición PORTABLE (Inmune a renombrado)
+# 2. Compilación Edición PORTABLE (-portable.exe, Inmune a renombrado)
 # -------------------------------------------------------------
 Write-Host "`n[2/4] Compilando versión PORTABLE (-portable.exe)..." -ForegroundColor Green
 Set-Location $WindowsRepoDir
@@ -95,71 +81,79 @@ Copy-Item $toolsX64Src $toolsPortDst -Force
 $checksumList += Generate-Checksum $syncPortDst
 $checksumList += Generate-Checksum $toolsPortDst
 
-Write-Host "  -> Creado: $(Split-Path -Leaf $syncPortDst)"
-Write-Host "  -> Creado: $(Split-Path -Leaf $toolsPortDst)"
-
-# Crear paquete ZIP Portable autosuficiente (Sync + Driver + portable.dat)
-$portableZipDir = Join-Path $DistDir "nfc-bridge-portable-$Version"
-New-Item -ItemType Directory -Path $portableZipDir -Force | Out-Null
-
-Copy-Item $syncPortDst (Join-Path $portableZipDir "nfc-bridge-sync-portable.exe")
-if (Test-Path $driverX64Src) {
-    Copy-Item $driverX64Src (Join-Path $portableZipDir "nfc-bridge-driver.exe")
-}
-[System.IO.File]::WriteAllText((Join-Path $portableZipDir "portable.dat"), "NFC Bridge Portable Container v$Version`n")
-[System.IO.File]::WriteAllText((Join-Path $portableZipDir "LEEME.txt"), "NFC Bridge Portable v$Version`n`nEjecuta 'nfc-bridge-sync-portable.exe'. Todo se guarda en esta carpeta.`nEl driver virtual se iniciara automaticamente en segundo plano sin ventana de consola.")
-
-$portableZipPath = Join-Path $DistDir "nfc-bridge-$Version-portable-bundle.zip"
-Compress-Archive -Path "$portableZipDir\*" -DestinationPath $portableZipPath -Force
-Remove-Item -Path $portableZipDir -Recurse -Force
-$checksumList += Generate-Checksum $portableZipPath
-Write-Host "  -> Creado Bundle ZIP: $(Split-Path -Leaf $portableZipPath)"
+Write-Host "  -> Creado: $(Split-Path -Leaf $syncPortDst) ($( [math]::Round((Get-Item $syncPortDst).Length / 1MB, 2) ) MB)"
+Write-Host "  -> Creado: $(Split-Path -Leaf $toolsPortDst) ($( [math]::Round((Get-Item $toolsPortDst).Length / 1MB, 2) ) MB)"
 
 # -------------------------------------------------------------
-# 3. Compilación x86 (32 bits) si está disponible el target
+# 3. Compilación x86 (32 bits)
 # -------------------------------------------------------------
 if (-not $SkipX86) {
     Write-Host "`n[3/4] Intentando compilar objetivo x86 (32 bits)..." -ForegroundColor Green
     Set-Location $WindowsRepoDir
-    $x86Target = "i686-pc-windows-gnu"
-    $x86Check = rustup target list --installed | Select-String "i686"
-    if ($x86Check) {
-        try {
-            cargo build --release --target $x86Target --bin nfc-bridge-sync
-            $syncX86Src = Join-Path $WindowsRepoDir "target\$x86Target\release\nfc-bridge-sync.exe"
-            if (Test-Path $syncX86Src) {
-                $syncX86Dst = Join-Path $DistDir "nfc-bridge-sync-$Version-x86.exe"
-                Copy-Item $syncX86Src $syncX86Dst -Force
-                $checksumList += Generate-Checksum $syncX86Dst
-                Write-Host "  -> Creado: $(Split-Path -Leaf $syncX86Dst)"
+    $x86Candidates = @("i686-pc-windows-msvc", "i686-pc-windows-gnu")
+    $installedTargets = rustup target list --installed
+    $x86Built = $false
+
+    foreach ($t in $x86Candidates) {
+        if ($installedTargets -contains $t) {
+            try {
+                cargo build --release --target $t --bin nfc-bridge-sync --bin nfc-bridge-tools
+                $syncSrc = Join-Path $WindowsRepoDir "target\$t\release\nfc-bridge-sync.exe"
+                $toolsSrc = Join-Path $WindowsRepoDir "target\$t\release\nfc-bridge-tools.exe"
+                if ((Test-Path $syncSrc) -and (Test-Path $toolsSrc)) {
+                    $syncDst = Join-Path $DistDir "nfc-bridge-sync-$Version-x86.exe"
+                    $toolsDst = Join-Path $DistDir "nfc-bridge-tools-$Version-x86.exe"
+                    Copy-Item $syncSrc $syncDst -Force
+                    Copy-Item $toolsSrc $toolsDst -Force
+                    $checksumList += Generate-Checksum $syncDst
+                    $checksumList += Generate-Checksum $toolsDst
+                    Write-Host "  -> Creado ($t): $(Split-Path -Leaf $syncDst)"
+                    Write-Host "  -> Creado ($t): $(Split-Path -Leaf $toolsDst)"
+                    $x86Built = $true
+                    break
+                }
+            } catch {
+                Write-Host "  [Aviso] Falló compilación x86 con $t (faltan librerías C/C++ x86 en el sistema)." -ForegroundColor Yellow
             }
-        } catch {
-            Write-Host "  [Aviso] Target x86 no tiene linker MinGW de 32 bits disponible actualmente. Saltando." -ForegroundColor Yellow
         }
+    }
+    if (-not $x86Built) {
+        Write-Host "  [Info] Para compilar x86 localmente instala el componente C++ x86 en Visual Studio Installer o usa el workflow de GitHub Actions." -ForegroundColor Yellow
     }
 }
 
 # -------------------------------------------------------------
-# 4. Compilación ARM64 si está disponible el target y linker
+# 4. Compilación ARM64 (Windows en Snapdragon / Surface ARM)
 # -------------------------------------------------------------
 if (-not $SkipArm64) {
-    Write-Host "`n[4/4] Verificando objetivo ARM64 (Surface / Windows en Snapdragon)..." -ForegroundColor Green
+    Write-Host "`n[4/4] Intentando compilar objetivo ARM64 (aarch64)..." -ForegroundColor Green
     Set-Location $WindowsRepoDir
     $armTarget = "aarch64-pc-windows-msvc"
-    $armCheck = rustup target list --installed | Select-String "aarch64"
-    if ($armCheck) {
+    $installedTargets = rustup target list --installed
+    $armBuilt = $false
+
+    if ($installedTargets -contains $armTarget) {
         try {
-            cargo build --release --target $armTarget --bin nfc-bridge-sync
-            $syncArmSrc = Join-Path $WindowsRepoDir "target\$armTarget\release\nfc-bridge-sync.exe"
-            if (Test-Path $syncArmSrc) {
-                $syncArmDst = Join-Path $DistDir "nfc-bridge-sync-$Version-arm64.exe"
-                Copy-Item $syncArmSrc $syncArmDst -Force
-                $checksumList += Generate-Checksum $syncArmDst
-                Write-Host "  -> Creado: $(Split-Path -Leaf $syncArmDst)"
+            cargo build --release --target $armTarget --bin nfc-bridge-sync --bin nfc-bridge-tools
+            $syncSrc = Join-Path $WindowsRepoDir "target\$armTarget\release\nfc-bridge-sync.exe"
+            $toolsSrc = Join-Path $WindowsRepoDir "target\$armTarget\release\nfc-bridge-tools.exe"
+            if ((Test-Path $syncSrc) -and (Test-Path $toolsSrc)) {
+                $syncDst = Join-Path $DistDir "nfc-bridge-sync-$Version-arm64.exe"
+                $toolsDst = Join-Path $DistDir "nfc-bridge-tools-$Version-arm64.exe"
+                Copy-Item $syncSrc $syncDst -Force
+                Copy-Item $toolsSrc $toolsDst -Force
+                $checksumList += Generate-Checksum $syncDst
+                $checksumList += Generate-Checksum $toolsDst
+                Write-Host "  -> Creado: $(Split-Path -Leaf $syncDst)"
+                Write-Host "  -> Creado: $(Split-Path -Leaf $toolsDst)"
+                $armBuilt = $true
             }
         } catch {
-            Write-Host "  [Aviso] Cross-compilación ARM64 requiere MSVC C++ ARM64 build tools. Saltando." -ForegroundColor Yellow
+            Write-Host "  [Aviso] Falló compilación ARM64 (faltan librerías C++ ARM64 en Visual Studio Installer)." -ForegroundColor Yellow
         }
+    }
+    if (-not $armBuilt) {
+        Write-Host "  [Info] Para compilar ARM64 localmente instala 'MSVC C++ ARM64 build tools' en Visual Studio Installer o usa el workflow de GitHub Actions." -ForegroundColor Yellow
     }
 }
 
@@ -169,6 +163,6 @@ $sha256SumsFile = Join-Path $DistDir "SHA256SUMS.txt"
 Write-Host "`nChecksums SHA-256 consolidados guardados en: $(Split-Path -Leaf $sha256SumsFile)" -ForegroundColor Cyan
 
 Write-Host "`n==========================================================" -ForegroundColor Green
-Write-Host "  ¡COMPILACIÓN Y EMPAQUETADO FINALIZADOS CON ÉXITO!" -ForegroundColor Green
+Write-Host "  ¡COMPILACIÓN DE NFC BRIDGE WINDOWS FINALIZADA!" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
 Get-ChildItem $DistDir | Select-Object Name, Length | Format-Table -AutoSize

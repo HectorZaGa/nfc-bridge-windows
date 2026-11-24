@@ -1,0 +1,95 @@
+name: Build Multi-Arch Releases (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.1.0)'
+        required: true
+        default: '1.1.0'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain & targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc,i686-pc-windows-msvc,aarch64-pc-windows-msvc
+
+      - name: Determine Version
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+            $v = "${{ github.ref_name }}".TrimStart('v')
+          } else {
+            $v = "${{ github.event.inputs.version }}"
+            if (-not $v) { $v = "1.1.0" }
+          }
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build x64, x86, ARM64 and Portable binaries
+        shell: pwsh
+        run: |
+          $Version = "${{ steps.ver.outputs.version }}"
+          $DistDir = "dist"
+          New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
+
+          function Add-Sha256($path) {
+            $hash = (Get-FileHash -Path $path -Algorithm SHA256).Hash.ToLower()
+            $name = Split-Path -Leaf $path
+            [System.IO.File]::WriteAllText("$path.sha256", "$hash *$name`n")
+            return "$hash *$name"
+          }
+
+          $sums = @()
+
+          # 1. x64 standard
+          cargo build --release --target x86_64-pc-windows-msvc --bin nfc-bridge-sync --bin nfc-bridge-tools
+          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-x64.exe" -Force
+          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-x64.exe" -Force
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-x64.exe"
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-x64.exe"
+
+          # 2. Portable (-portable.exe with compile-time portable feature)
+          cargo build --release --target x86_64-pc-windows-msvc --bin nfc-bridge-sync --features portable
+          cargo build --release --target x86_64-pc-windows-msvc --bin nfc-bridge-tools --features portable
+          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-portable.exe" -Force
+          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-portable.exe" -Force
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-portable.exe"
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-portable.exe"
+
+          # 3. x86 (32-bit)
+          cargo build --release --target i686-pc-windows-msvc --bin nfc-bridge-sync --bin nfc-bridge-tools
+          Copy-Item "target\i686-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-x86.exe" -Force
+          Copy-Item "target\i686-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-x86.exe" -Force
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-x86.exe"
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-x86.exe"
+
+          # 4. ARM64
+          cargo build --release --target aarch64-pc-windows-msvc --bin nfc-bridge-sync --bin nfc-bridge-tools
+          Copy-Item "target\aarch64-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-arm64.exe" -Force
+          Copy-Item "target\aarch64-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-arm64.exe" -Force
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-arm64.exe"
+          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-arm64.exe"
+
+          [System.IO.File]::WriteAllLines("$DistDir\SHA256SUMS.txt", $sums)
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfc-bridge-windows-${{ steps.ver.outputs.version }}
+          path: dist/*
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
