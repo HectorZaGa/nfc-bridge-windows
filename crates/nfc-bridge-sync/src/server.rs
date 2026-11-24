@@ -31,6 +31,15 @@ impl BridgeSyncServer {
 
         info!("NFC Bridge Sync escuchando conexiones en {}", addr);
 
+        // Iniciar responder UDP para auto-descubrimiento en la red local (Wi-Fi / LAN)
+        let udp_port = self.port;
+        let pc_name_udp = self.pc_name.clone();
+        tokio::spawn(async move {
+            if let Err(e) = Self::run_udp_discovery_responder(udp_port, pc_name_udp).await {
+                warn!("UDP discovery responder finalizó con error: {}", e);
+            }
+        });
+
         loop {
             match listener.accept().await {
                 Ok((socket, peer_addr)) => {
@@ -105,5 +114,44 @@ impl BridgeSyncServer {
         }
 
         Ok(())
+    }
+
+    /// Tarea asíncrona de responder datagramas de descubrimiento UDP.
+    /// Responde a paquetes que contengan "NFC_BRIDGE_DISCOVERY" con los metadatos de la PC.
+    async fn run_udp_discovery_responder(port: u16, pc_name: String) -> Result<()> {
+        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        let socket = tokio::net::UdpSocket::bind(addr)
+            .await
+            .with_context(|| format!("No se pudo enlazar socket UDP en {}", addr))?;
+
+        info!("NFC Bridge Sync responder UDP activo en {} para auto-descubrimiento Wi-Fi", addr);
+
+        let mut buf = [0u8; 1024];
+        loop {
+            match socket.recv_from(&mut buf).await {
+                Ok((len, peer_addr)) => {
+                    let msg = String::from_utf8_lossy(&buf[..len]);
+                    if msg.contains("NFC_BRIDGE_DISCOVERY") {
+                        let pc_id = format!(
+                            "{:04X}{:04X}",
+                            core_proto::crc16::compute(pc_name.as_bytes()),
+                            core_proto::crc16::compute(&port.to_le_bytes())
+                        );
+                        let response = format!(
+                            r#"{{"id":"{}","name":"{}","port":{},"model":"WINDOWS","status":"ready"}}"#,
+                            pc_id, pc_name, port
+                        );
+                        if let Err(e) = socket.send_to(response.as_bytes(), peer_addr).await {
+                            warn!("Error al responder descubrimiento UDP a {}: {}", peer_addr, e);
+                        } else {
+                            info!("Descubrimiento Wi-Fi: respondido a {} (PC: '{}')", peer_addr, pc_name);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Error al recibir datagrama UDP de descubrimiento: {}", e);
+                }
+            }
+        }
     }
 }
