@@ -188,26 +188,11 @@ impl DriverManager {
         std::process::Command::new(driver_exe).spawn()
     }
 
-    /// Registra e inicia el driver virtual (incluyendo UsbDk embebido para USB AOA) con un solo UAC.
+    /// Registra e inicia el servicio Windows `NfcBridgeDriver` con un solo UAC.
     pub fn install_driver_service_elevated(&self, driver_exe: &Path) -> std::io::Result<bool> {
         let escaped_exe = driver_exe.to_string_lossy().replace('\'', "''");
         let script = format!(
             "$p = Start-Process -FilePath '{}' -ArgumentList '--install-service' -Verb RunAs -Wait -PassThru; exit $p.ExitCode",
-            escaped_exe
-        );
-
-        let status = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-            .status()?;
-
-        Ok(status.success())
-    }
-
-    /// Instala únicamente el filtro USB UsbDk embebido en `nfc-bridge-driver.exe` (modo portable).
-    pub fn install_usbdk_elevated(&self, driver_exe: &Path) -> std::io::Result<bool> {
-        let escaped_exe = driver_exe.to_string_lossy().replace('\'', "''");
-        let script = format!(
-            "$p = Start-Process -FilePath '{}' -ArgumentList '--install-usbdk' -Verb RunAs -Wait -PassThru; exit $p.ExitCode",
             escaped_exe
         );
 
