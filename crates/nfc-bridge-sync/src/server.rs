@@ -53,6 +53,7 @@ pub enum IpcCommand {
     DisconnectDevice,
     RevokeTrustedDevice { device_id: String },
     RenameTrustedDevice { device_id: String, name: String },
+    SelectTrustedDevice { device_id: String },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -219,6 +220,7 @@ pub struct DesktopLiveState {
     pub mobile_id: Option<String>,
     pub device_os: Option<String>,
     pub active_device_id: Option<String>,
+    pub selected_device_id: Option<String>,
     pub last_device_name: Option<String>,
     pub last_endpoint: Option<String>,
     pub last_transport: Option<String>,
@@ -244,6 +246,7 @@ impl Default for DesktopLiveState {
             mobile_id: None,
             device_os: None,
             active_device_id: None,
+            selected_device_id: None,
             last_device_name: None,
             last_endpoint: None,
             last_transport: None,
@@ -276,6 +279,24 @@ impl DriverIpcClient {
 
     pub async fn get_live_state(&self) -> DesktopLiveState {
         self.state.read().await.clone()
+    }
+
+    pub async fn select_saved_profile(&self, device_id: &str) {
+        let mut st = self.state.write().await;
+        st.selected_device_id = Some(device_id.to_string());
+        if let Some(dev) = st
+            .snapshot
+            .trusted_devices
+            .iter()
+            .find(|d| d.device_id == device_id)
+            .cloned()
+        {
+            st.last_device_name = Some(dev.device_name);
+            st.last_transport = dev.transport;
+            st.last_mobile_id = dev.mobile_id;
+            st.last_device_os = dev.device_os;
+            st.last_endpoint = dev.endpoint;
+        }
     }
 
     pub async fn send_command(&self, cmd: IpcCommand) -> Result<()> {
@@ -426,7 +447,12 @@ impl DriverIpcClient {
                     st.transport = transport.clone();
                     st.mobile_id = mobile_id.clone();
                     st.device_os = device_os.clone();
-                    st.active_device_id = active_device_id;
+                    st.active_device_id = active_device_id.clone();
+                    if connected {
+                        if let Some(ref aid) = active_device_id {
+                            st.selected_device_id = Some(aid.clone());
+                        }
+                    }
                     if let Some(ref name) = device_name {
                         st.last_device_name = Some(name.clone());
                     }

@@ -319,6 +319,21 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                         }
                         _ => Err(anyhow::anyhow!("Falta device_id o name")),
                     },
+                    "select_profile" => match req.device_id.filter(|id| !id.trim().is_empty()) {
+                        Some(device_id) => {
+                            ipc.select_saved_profile(&device_id).await;
+                            let r = ipc
+                                .send_command(IpcCommand::SelectTrustedDevice { device_id })
+                                .await;
+                            if r.is_ok() {
+                                let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                                let _ = ipc.send_command(IpcCommand::GetStatus).await;
+                                tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+                            }
+                            r
+                        }
+                        None => Err(anyhow::anyhow!("Falta device_id")),
+                    },
                     _ => Err(anyhow::anyhow!("Comando desconocido")),
                 };
                 match res {

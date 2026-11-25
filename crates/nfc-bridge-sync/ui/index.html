@@ -1010,11 +1010,32 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
         items.forEach(function (item) {
           const tMeta = getTransportMeta(item.transport, item.endpoint);
+          const isSelectedSaved = !s.connected && !!s.selected_device_id && item.device_id === s.selected_device_id;
+          const isHighlighted = item.active || isSelectedSaved;
           const row = document.createElement('div');
           row.setAttribute('role', 'option');
-          row.setAttribute('aria-selected', item.active ? 'true' : 'false');
-          row.className = 'w-full px-gutter-md py-2 rounded-sm flex items-center justify-between gap-gutter-sm ' +
-            (item.active ? 'bg-dark-surface-elevated' : 'hover:bg-dark-surface-elevated/60');
+          row.setAttribute('aria-selected', isHighlighted ? 'true' : 'false');
+          row.className = 'w-full px-gutter-md py-2 rounded-sm flex items-center justify-between gap-gutter-sm transition-colors ' +
+            (item.device_id ? 'cursor-pointer ' : '') +
+            (isHighlighted ? 'bg-dark-surface-elevated' : 'hover:bg-dark-surface-elevated/60');
+
+          if (item.device_id) {
+            row.addEventListener('click', function (ev) {
+              if (editingDeviceId && editingDeviceId === item.device_id) return;
+              ev.stopPropagation();
+              setDropdownOpen(false);
+              if (item.active) return;
+              fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: 'select_profile', device_id: item.device_id })
+              }).then(function () {
+                refreshState();
+                setTimeout(refreshState, 400);
+                setTimeout(refreshState, 1100);
+              }).catch(function () {});
+            });
+          }
 
           const left = document.createElement('div');
           left.className = 'flex items-center gap-gutter-sm min-w-0 flex-1';
@@ -1113,9 +1134,9 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
           const right = document.createElement('div');
           right.className = 'flex items-center gap-1 shrink-0';
-          if (item.active) {
+          if (item.active || isSelectedSaved) {
             const checkIcon = document.createElement('span');
-            checkIcon.className = 'material-symbols-outlined text-title-md text-electric-blue mr-0.5';
+            checkIcon.className = 'material-symbols-outlined text-title-md mr-0.5 ' + (item.active ? 'text-electric-blue' : 'text-dark-on-surface-muted');
             checkIcon.textContent = 'check';
             right.appendChild(checkIcon);
           }
@@ -1321,10 +1342,12 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               setActiveDeviceGraphic('none', null, null);
               countBadge.textContent = savedCount > 0 ? ('0 conectados • ' + savedCount + ' guardados') : '0 conectados';
             } else if (s.last_device_name || deviceItems.length > 0) {
-              const savedProfile = s.last_device_name || deviceItems[0].name;
-              const savedOs = s.last_device_os || (deviceItems[0] ? deviceItems[0].device_os : null);
-              const savedTr = s.last_transport || (deviceItems[0] ? deviceItems[0].transport : null);
-              const tMeta = getTransportMeta(savedTr, s.last_endpoint || (deviceItems[0] ? deviceItems[0].endpoint : null));
+              const chosenSaved = (s.selected_device_id && deviceItems.find(function (d) { return d.device_id === s.selected_device_id; })) || deviceItems[0] || null;
+              const savedProfile = (chosenSaved && chosenSaved.name) || s.last_device_name;
+              const savedOs = (chosenSaved && chosenSaved.device_os) || s.last_device_os;
+              const savedTr = (chosenSaved && chosenSaved.transport) || s.last_transport;
+              const savedEndpoint = (chosenSaved && chosenSaved.endpoint) || s.last_endpoint;
+              const tMeta = getTransportMeta(savedTr, savedEndpoint);
               activeTransportCapsuleIcon.textContent = tMeta.icon;
               activeTransportCapsule.title = tMeta.label;
               activeTransportCapsule.className = 'inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline text-dark-on-surface-muted shrink-0';
