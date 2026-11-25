@@ -235,6 +235,7 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                             .await;
                         if r.is_ok() {
                             let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                         r
                     }
@@ -246,6 +247,7 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                             .await;
                         if r.is_ok() {
                             let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                         r
                     }
@@ -257,6 +259,7 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                             .await;
                         if r.is_ok() {
                             let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                         r
                     }
@@ -268,6 +271,7 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                             .await;
                         if r.is_ok() {
                             let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                         r
                     }
@@ -279,6 +283,7 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                             .await;
                         if r.is_ok() {
                             let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                         }
                         r
                     }

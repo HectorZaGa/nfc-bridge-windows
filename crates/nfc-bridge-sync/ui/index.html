@@ -301,10 +301,16 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             </p>
           </div>
 
-          <button type="button" data-qr-method="relay" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
-            <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
-            <span>Generar QR y enlace</span>
-          </button>
+          <div class="flex flex-col gap-gutter-xs">
+            <button id="btn-refresh-relay-link" type="button" class="w-full h-9 rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center justify-center gap-1.5 hover:border-electric-blue transition-colors">
+              <span class="material-symbols-outlined text-title-md text-electric-blue" aria-hidden="true">refresh</span>
+              <span>Generar otro enlace</span>
+            </button>
+            <button type="button" data-qr-method="relay" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
+              <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
+              <span>Generar QR</span>
+            </button>
+          </div>
         </div>
 
         <!-- CASO 2: BLUETOOTH -->
@@ -723,9 +729,15 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: cmd, enabled: enabled })
         }).then(function () {
-          setTimeout(refreshState, 120);
+          refreshState();
+          setTimeout(refreshState, 220);
         }).catch(function () {});
       }
+
+      document.getElementById('btn-refresh-relay-link').addEventListener('click', function () {
+        liveRelayInFlight = false;
+        refreshLiveRelayLink();
+      });
 
       document.getElementById('btn-toggle-bt').addEventListener('click', function () {
         sendToggleCommand('set_bt_enabled', !transportToggleState.bt_enabled);
