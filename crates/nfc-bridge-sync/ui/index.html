@@ -599,7 +599,12 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (!res.ok) {
-              document.getElementById('qr-svg-container').innerHTML = '<span class="font-label text-[11px] text-[#7F2929] px-2">' + (res.error || 'Driver no disponible') + '</span>';
+              const box = document.getElementById('qr-svg-container');
+              box.replaceChildren();
+              const span = document.createElement('span');
+              span.className = 'font-label text-[11px] text-[#7F2929] px-2';
+              span.textContent = res.error || 'Driver no disponible';
+              box.appendChild(span);
               return;
             }
             document.getElementById('qr-svg-container').innerHTML = res.svg;
