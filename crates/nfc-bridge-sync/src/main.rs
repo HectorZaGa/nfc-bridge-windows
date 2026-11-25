@@ -13,8 +13,79 @@ fn get_local_ip() -> Option<String> {
     socket.local_addr().ok().map(|addr| addr.ip().to_string())
 }
 
+fn replace_previous_sync_processes() -> usize {
+    #[cfg(windows)]
+    {
+        use std::mem::{size_of, zeroed};
+        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+        use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+            TH32CS_SNAPPROCESS,
+        };
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+            PROCESS_TERMINATE,
+        };
+
+        let self_pid = std::process::id();
+        let mut killed = 0usize;
+
+        unsafe {
+            let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snap == INVALID_HANDLE_VALUE {
+                return 0;
+            }
+
+            let mut entry: PROCESSENTRY32W = zeroed();
+            entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
+
+            if Process32FirstW(snap, &mut entry) != 0 {
+                loop {
+                    let pid = entry.th32ProcessID;
+                    if pid != 0 && pid != self_pid {
+                        let end = entry
+                            .szExeFile
+                            .iter()
+                            .position(|&c| c == 0)
+                            .unwrap_or(entry.szExeFile.len());
+                        let exe_name = String::from_utf16_lossy(&entry.szExeFile[..end])
+                            .to_lowercase();
+
+                        if exe_name.starts_with("nfc-bridge-sync") {
+                            let proc_handle =
+                                OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, 0, pid);
+                            if !proc_handle.is_null() {
+                                if TerminateProcess(proc_handle, 0) != 0 {
+                                    let _ = WaitForSingleObject(proc_handle, 1500);
+                                    killed += 1;
+                                }
+                                let _ = CloseHandle(proc_handle);
+                            }
+                        }
+                    }
+                    if Process32NextW(snap, &mut entry) == 0 {
+                        break;
+                    }
+                }
+            }
+
+            let _ = CloseHandle(snap);
+        }
+        killed
+    }
+    #[cfg(not(windows))]
+    {
+        0
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let killed_prev_sync = replace_previous_sync_processes();
+    if killed_prev_sync > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .finish();
