@@ -3,6 +3,7 @@ members = [
     "crates/core-proto",
     "crates/nfc-bridge-sync",
     "crates/nfc-bridge-tools",
+    "crates/nfc-bridge-installer",
 ]
 resolver = "2"
 

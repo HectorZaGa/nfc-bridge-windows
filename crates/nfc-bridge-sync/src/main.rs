@@ -1,7 +1,9 @@
 use anyhow::Result;
 use nfc_bridge_sync::ui_http::DEFAULT_UI_HTTP_PORT;
+use nfc_bridge_sync::updater::cleanup_stale_update_files;
 use nfc_bridge_sync::{
-    AppConfig, DesktopUiServer, DriverIpcClient, DriverManager, DriverStatus, EmbeddedUi,
+    AppConfig, DesktopUiServer, DesktopUpdater, DriverIpcClient, DriverManager, DriverStatus,
+    EmbeddedUi,
 };
 use std::net::UdpSocket;
 use tracing::{info, warn, Level};
@@ -51,7 +53,9 @@ fn replace_previous_sync_processes() -> usize {
                         let exe_name = String::from_utf16_lossy(&entry.szExeFile[..end])
                             .to_lowercase();
 
-                        if exe_name.starts_with("nfc-bridge-sync") {
+                        if exe_name.starts_with("nfc-bridge-sync")
+                            || exe_name.starts_with("nfc bridge sync")
+                        {
                             let proc_handle =
                                 OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, 0, pid);
                             if !proc_handle.is_null() {
@@ -81,6 +85,7 @@ fn replace_previous_sync_processes() -> usize {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    cleanup_stale_update_files();
     let killed_prev_sync = replace_previous_sync_processes();
     if killed_prev_sync > 0 {
         std::thread::sleep(std::time::Duration::from_millis(150));
@@ -152,10 +157,34 @@ async fn main() -> Result<()> {
 
     // Conectarse exclusivamente al driver vía Named Pipe IPC (nunca abre puertos de red por su cuenta)
     let ipc_client = DriverIpcClient::new();
-    let ui_server = DesktopUiServer::new(ipc_client.clone(), DEFAULT_UI_HTTP_PORT);
+    let updater = DesktopUpdater::new();
+    updater
+        .set_product_identity("sync", "NFC Bridge Sync", env!("CARGO_PKG_VERSION"))
+        .await;
+    let ui_server = DesktopUiServer::with_updater(
+        ipc_client.clone(),
+        updater.clone(),
+        DEFAULT_UI_HTTP_PORT,
+    );
     tokio::spawn(async move {
         ui_server.run().await;
     });
+
+    {
+        let updater_init = updater.clone();
+        let ipc_init = ipc_client.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(1800)).await;
+            let live = ipc_init.get_live_state().await;
+            updater_init
+                .check_all(
+                    live.snapshot.driver_version,
+                    live.ui_settings.auto_update_app,
+                    live.ui_settings.auto_update_driver,
+                )
+                .await;
+        });
+    }
 
     if std::env::args().any(|a| a == "--open-ui" || a == "--ui") {
         let url = format!("http://127.0.0.1:{}", DEFAULT_UI_HTTP_PORT);

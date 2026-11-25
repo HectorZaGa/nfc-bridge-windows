@@ -215,6 +215,10 @@ pub struct SyncUiSettings {
     pub theme_mode: String,
     pub use_windows_accent: bool,
     pub custom_accent_hex: String,
+    #[serde(default)]
+    pub auto_update_app: bool,
+    #[serde(default)]
+    pub auto_update_driver: bool,
 }
 
 impl Default for SyncUiSettings {
@@ -223,6 +227,8 @@ impl Default for SyncUiSettings {
             theme_mode: "dark".to_string(),
             use_windows_accent: false,
             custom_accent_hex: "#3B82F6".to_string(),
+            auto_update_app: false,
+            auto_update_driver: false,
         }
     }
 }
@@ -369,10 +375,18 @@ impl DriverIpcClient {
             },
             use_windows_accent: settings.use_windows_accent,
             custom_accent_hex: normalize_hex_color(&settings.custom_accent_hex),
+            auto_update_app: settings.auto_update_app,
+            auto_update_driver: settings.auto_update_driver,
         };
         save_ui_settings(&clean);
         let mut st = self.state.write().await;
         st.ui_settings = clean;
+    }
+
+    pub async fn set_product_meta(&self, version: &str, build_id: &str) {
+        let mut st = self.state.write().await;
+        st.sync_version = version.to_string();
+        st.sync_build_id = build_id.to_string();
     }
 
     pub async fn clear_pending_mobile_switch(&self, request_id: Option<&str>) {
@@ -394,14 +408,22 @@ impl DriverIpcClient {
 
     pub async fn select_saved_profile(&self, device_id: &str) {
         let mut st = self.state.write().await;
-        st.selected_device_id = Some(device_id.to_string());
-        if let Some(dev) = st
+        let target_dev = st
             .snapshot
             .trusted_devices
             .iter()
             .find(|d| d.device_id == device_id)
-            .cloned()
-        {
+            .cloned();
+        let same_connected_phone = st.connected
+            && target_dev.as_ref().is_some_and(|dev| match (&st.mobile_id, &dev.mobile_id) {
+                (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
+                _ => st.device_name.as_deref() == Some(dev.device_name.as_str()),
+            });
+        if same_connected_phone {
+            return;
+        }
+        st.selected_device_id = Some(device_id.to_string());
+        if let Some(dev) = target_dev {
             st.last_device_name = Some(dev.device_name);
             st.last_transport = dev.transport;
             st.last_mobile_id = dev.mobile_id;

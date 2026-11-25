@@ -11,6 +11,7 @@ use tracing::{info, warn};
 
 use crate::config::EmbeddedUi;
 use crate::server::{DriverIpcClient, IpcCommand};
+use crate::updater::DesktopUpdater;
 
 pub const DEFAULT_UI_HTTP_PORT: u16 = 45363;
 
@@ -46,6 +47,10 @@ struct CommandRequest {
     use_windows_accent: Option<bool>,
     #[serde(default)]
     custom_accent_hex: Option<String>,
+    #[serde(default)]
+    auto_update_app: Option<bool>,
+    #[serde(default)]
+    auto_update_driver: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -55,12 +60,21 @@ struct RelayRequest {
 
 pub struct DesktopUiServer {
     ipc: DriverIpcClient,
+    updater: DesktopUpdater,
     port: u16,
 }
 
 impl DesktopUiServer {
     pub fn new(ipc: DriverIpcClient, port: u16) -> Self {
-        Self { ipc, port }
+        Self {
+            ipc,
+            updater: DesktopUpdater::new(),
+            port,
+        }
+    }
+
+    pub fn with_updater(ipc: DriverIpcClient, updater: DesktopUpdater, port: u16) -> Self {
+        Self { ipc, updater, port }
     }
 
     pub async fn run(&self) {
@@ -79,9 +93,10 @@ impl DesktopUiServer {
                 continue;
             };
             let ipc = self.ipc.clone();
+            let updater = self.updater.clone();
             let port = self.port;
             tokio::spawn(async move {
-                let _ = handle_http_conn(stream, ipc, port).await;
+                let _ = handle_http_conn(stream, ipc, updater, port).await;
             });
         }
     }
@@ -131,7 +146,12 @@ fn is_valid_relay_url(raw: &str) -> bool {
         || t.starts_with("ws://localhost")
 }
 
-async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16) -> anyhow::Result<()> {
+async fn handle_http_conn(
+    mut stream: TcpStream,
+    ipc: DriverIpcClient,
+    updater: DesktopUpdater,
+    port: u16,
+) -> anyhow::Result<()> {
     let mut buf = vec![0u8; 16 * 1024];
     let n = stream.read(&mut buf).await?;
     if n == 0 {
@@ -202,7 +222,17 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
         ("GET", "/api/state") => {
             let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
             let state = ipc.get_live_state().await;
-            let json = serde_json::to_string(&state).unwrap_or_else(|_| "{}".to_string());
+            updater
+                .set_known_driver_version(state.snapshot.driver_version.clone())
+                .await;
+            let updates = updater.snapshot().await;
+            let mut val = serde_json::to_value(&state).unwrap_or_else(|_| serde_json::json!({}));
+            if let Some(obj) = val.as_object_mut() {
+                if let Ok(up_val) = serde_json::to_value(&updates) {
+                    obj.insert("updates".to_string(), up_val);
+                }
+            }
+            let json = val.to_string();
             ("200 OK", "application/json", json)
         }
         ("POST", "/api/qr") => match serde_json::from_str::<QrRequest>(body) {
@@ -366,10 +396,40 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                             custom_accent_hex: req
                                 .custom_accent_hex
                                 .unwrap_or(cur.custom_accent_hex),
+                            auto_update_app: req.auto_update_app.unwrap_or(cur.auto_update_app),
+                            auto_update_driver: req
+                                .auto_update_driver
+                                .unwrap_or(cur.auto_update_driver),
                         };
                         ipc.update_ui_settings(updated).await;
                         Ok(())
                     }
+                    "check_updates" => {
+                        let live = ipc.get_live_state().await;
+                        let updater_bg = updater.clone();
+                        let drv_ver = live.snapshot.driver_version.clone();
+                        let auto_app = live.ui_settings.auto_update_app;
+                        let auto_drv = live.ui_settings.auto_update_driver;
+                        tokio::spawn(async move {
+                            updater_bg.check_all(drv_ver, auto_app, auto_drv).await;
+                        });
+                        Ok(())
+                    }
+                    "install_app_update" => {
+                        let updater_bg = updater.clone();
+                        tokio::spawn(async move {
+                            let _ = updater_bg.install_app_update().await;
+                        });
+                        Ok(())
+                    }
+                    "install_driver_update" => {
+                        let updater_bg = updater.clone();
+                        tokio::spawn(async move {
+                            let _ = updater_bg.install_driver_update().await;
+                        });
+                        Ok(())
+                    }
+                    "restart_app" => updater.restart_running_app().await,
                     "set_tcp_network" => {
                         let r = ipc
                             .send_command(IpcCommand::SetTcpNetworkConfig {

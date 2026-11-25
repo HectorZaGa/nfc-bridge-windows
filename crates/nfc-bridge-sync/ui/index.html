@@ -163,14 +163,18 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         <div class="w-7 h-7 rounded-sm bg-electric-blue-soft border border-electric-blue-border flex items-center justify-center shrink-0" aria-hidden="true">
           <span class="material-symbols-outlined text-electric-blue text-title-md">contactless</span>
         </div>
-        <span class="font-headline text-title-md text-dark-on-surface tracking-tight" data-design-text-token="title-md">NFC Bridge Lite</span>
+        <span id="header-app-title" class="font-headline text-title-md text-dark-on-surface tracking-tight" data-design-text-token="title-md">NFC Bridge Sync</span>
         <span id="pc-name-badge" class="px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface-muted" data-design-text-token="label-md">PC Windows</span>
         <span id="build-version-badge" title="Versión y Build ID" class="px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated/60 border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">v0.1.1</span>
       </div>
 
       <div class="flex items-center gap-1">
-        <button id="btn-open-settings" type="button" title="Opciones" aria-label="Opciones" class="w-8 h-8 rounded-sm inline-flex items-center justify-center text-dark-on-surface-muted transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated hover:text-dark-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+        <button id="btn-open-settings" type="button" title="Opciones" aria-label="Opciones" class="relative w-8 h-8 rounded-sm inline-flex items-center justify-center text-dark-on-surface-muted transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated hover:text-dark-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
           <span class="material-symbols-outlined text-title-lg" aria-hidden="true">settings</span>
+          <svg id="btn-open-settings-badge" viewBox="0 0 12 12" class="hidden absolute right-0.5 bottom-0.5 w-3.5 h-3.5 pointer-events-none" aria-hidden="true">
+            <circle cx="6" cy="6" r="5.5" fill="var(--nb-surface-card)"></circle>
+            <path d="M6 2.5V8.8M3.3 6.5L6 9.2L8.7 6.5" fill="none" stroke="var(--nb-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
         </button>
         <button type="button" title="Minimizar a la bandeja del sistema" aria-label="Minimizar a la bandeja del sistema" class="w-8 h-8 rounded-sm inline-flex items-center justify-center text-dark-on-surface-muted transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated hover:text-dark-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
           <span class="material-symbols-outlined text-title-lg" aria-hidden="true">remove</span>
@@ -611,17 +615,16 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
             <div class="flex items-center justify-between gap-2">
               <span class="font-label text-label-md text-dark-on-surface-muted">Color personalizado</span>
-              <div class="flex items-center gap-1.5">
-                <button type="button" data-accent-preset="#3B82F6" title="Azul" class="accent-preset-btn w-5 h-5 rounded-full bg-[#3B82F6] border border-white/30"></button>
-                <button type="button" data-accent-preset="#06B6D4" title="Cian" class="accent-preset-btn w-5 h-5 rounded-full bg-[#06B6D4] border border-white/30"></button>
-                <button type="button" data-accent-preset="#10B981" title="Esmeralda" class="accent-preset-btn w-5 h-5 rounded-full bg-[#10B981] border border-white/30"></button>
-                <button type="button" data-accent-preset="#8B5CF6" title="Violeta" class="accent-preset-btn w-5 h-5 rounded-full bg-[#8B5CF6] border border-white/30"></button>
-                <button type="button" data-accent-preset="#EC4899" title="Magenta" class="accent-preset-btn w-5 h-5 rounded-full bg-[#EC4899] border border-white/30"></button>
-                <button type="button" data-accent-preset="#F59E0B" title="Ámbar" class="accent-preset-btn w-5 h-5 rounded-full bg-[#F59E0B] border border-white/30"></button>
-                <label class="inline-flex items-center gap-1 ml-1 cursor-pointer bg-dark-surface border border-dark-outline rounded-sm px-1.5 py-0.5">
-                  <input id="settings-custom-color" type="color" value="#3B82F6" class="w-4 h-4 bg-transparent border-0 p-0 cursor-pointer">
-                  <span id="settings-custom-hex" class="font-mono text-[10px] text-dark-on-surface">#3B82F6</span>
-                </label>
+              <div class="flex items-center gap-2">
+                <button type="button" data-accent-preset="#3B82F6" title="Azul" class="accent-preset-btn w-6 h-6 rounded-full bg-[#3B82F6] transition-transform hover:scale-105"></button>
+                <button type="button" data-accent-preset="#06B6D4" title="Cian" class="accent-preset-btn w-6 h-6 rounded-full bg-[#06B6D4] transition-transform hover:scale-105"></button>
+                <button type="button" data-accent-preset="#10B981" title="Esmeralda" class="accent-preset-btn w-6 h-6 rounded-full bg-[#10B981] transition-transform hover:scale-105"></button>
+                <button type="button" data-accent-preset="#8B5CF6" title="Violeta" class="accent-preset-btn w-6 h-6 rounded-full bg-[#8B5CF6] transition-transform hover:scale-105"></button>
+                <button type="button" data-accent-preset="#EC4899" title="Magenta" class="accent-preset-btn w-6 h-6 rounded-full bg-[#EC4899] transition-transform hover:scale-105"></button>
+                <button type="button" data-accent-preset="#F59E0B" title="Ámbar" class="accent-preset-btn w-6 h-6 rounded-full bg-[#F59E0B] transition-transform hover:scale-105"></button>
+                <button id="btn-open-custom-color" type="button" title="Elegir color personalizado" aria-label="Elegir color personalizado" class="w-7 h-7 rounded-full bg-dark-surface border border-dark-outline inline-flex items-center justify-center text-dark-on-surface hover:border-electric-blue transition-all">
+                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">colorize</span>
+                </button>
               </div>
             </div>
           </div>
@@ -649,7 +652,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               </label>
               <label class="flex flex-col gap-1">
                 <span class="font-label text-[11px] text-dark-on-surface-muted">Puerto TCP</span>
-                <input id="settings-tcp-port" type="number" min="1024" max="65535" value="45362" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
+                <input id="settings-tcp-port" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="45362" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
               </label>
             </div>
 
@@ -662,6 +665,66 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             </div>
           </div>
         </section>
+
+        <!-- 3. Actualizaciones (GitHub Releases: Programa actual + Driver) -->
+        <section class="flex flex-col gap-gutter-sm">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Actualizaciones (GitHub)</span>
+            <button id="btn-check-updates" type="button" class="inline-flex items-center gap-1 font-label text-[11px] text-electric-blue hover:underline">
+              <span class="material-symbols-outlined text-[14px]" aria-hidden="true">refresh</span>
+              <span>Buscar actualizaciones</span>
+            </button>
+          </div>
+
+          <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
+            <!-- Programa desktop actual (Sync o Tools) -->
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span id="upd-app-title" class="font-label text-label-lg text-dark-on-surface truncate">NFC Bridge Sync</span>
+                  <span id="upd-app-mode-chip" class="px-1.5 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">Portable</span>
+                </div>
+                <button id="btn-toggle-auto-update-app" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Auto: Off</button>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span id="upd-app-status-msg" class="font-body text-[11px] text-dark-on-surface-muted truncate">Sin comprobar aún</span>
+                <button id="btn-action-update-app" type="button" class="hidden h-7 px-2.5 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] shrink-0 hover:opacity-95 transition-opacity">Instalar</button>
+              </div>
+            </div>
+
+            <div class="h-px bg-dark-outline"></div>
+
+            <!-- Driver Virtual PC/SC -->
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="font-label text-label-lg text-dark-on-surface truncate">NFC Bridge Driver</span>
+                  <span id="upd-driver-version-chip" class="px-1.5 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">--</span>
+                </div>
+                <button id="btn-toggle-auto-update-driver" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Auto: Off</button>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span id="upd-driver-status-msg" class="font-body text-[11px] text-dark-on-surface-muted truncate">Sin comprobar aún</span>
+                <button id="btn-action-update-driver" type="button" class="hidden h-7 px-2.5 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] shrink-0 hover:opacity-95 transition-opacity">Actualizar driver</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE REINICIO REQUERIDO TRAS ACTUALIZACIÓN PORTABLE -->
+  <div id="restart-required-modal" class="hidden fixed inset-0 z-[55] bg-black/65 backdrop-blur-[2px] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div class="w-full max-w-[390px] bg-dark-surface-card border border-dark-outline rounded-md shadow-2xl p-gutter-lg flex flex-col gap-gutter-md">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-electric-blue text-title-lg" aria-hidden="true">system_update_alt</span>
+        <h3 class="font-headline text-title-md text-dark-on-surface">Actualización lista</h3>
+      </div>
+      <p id="restart-required-desc" class="font-body text-body-md text-dark-on-surface-muted">La nueva versión portable se ha descargado junto al ejecutable. Reinicia la aplicación para comenzar a usarla.</p>
+      <div class="flex items-center justify-end gap-2">
+        <button id="btn-dismiss-restart" type="button" class="h-9 px-3 rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline">Más tarde</button>
+        <button id="btn-restart-now" type="button" class="h-9 px-3 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-md hover:opacity-95">Reiniciar ahora</button>
       </div>
     </div>
   </div>
@@ -692,6 +755,47 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       <div class="flex items-center justify-end gap-2">
         <button id="btn-keep-invalid-profile" type="button" class="h-9 px-3 rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline">Mantener</button>
         <button id="btn-delete-invalid-profile" type="button" class="h-9 px-3 rounded-sm bg-red-disconnect-soft border border-red-disconnect-border text-red-disconnect font-label text-label-md hover:opacity-95">Eliminar perfil</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE SELECTOR DE COLOR PERSONALIZADO (HSV tipo Android App) -->
+  <div id="custom-color-modal" class="hidden fixed inset-0 z-[60] bg-black/65 backdrop-blur-[2px] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="custom-color-modal-title">
+    <div class="w-full max-w-[380px] bg-dark-surface-card border border-dark-outline rounded-md shadow-2xl p-gutter-lg flex flex-col gap-gutter-md select-none">
+      <div class="flex items-center justify-between gap-2">
+        <h3 id="custom-color-modal-title" class="font-headline text-title-md text-dark-on-surface">Color personalizado</h3>
+        <button id="btn-reset-custom-color" type="button" class="font-label text-label-md text-electric-blue hover:underline">Restablecer</button>
+      </div>
+
+      <div id="cp-sv-box" class="relative w-full h-36 rounded-sm overflow-hidden cursor-crosshair border border-dark-outline">
+        <div class="absolute inset-0 bg-gradient-to-r from-white to-transparent pointer-events-none"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black pointer-events-none"></div>
+        <div id="cp-sv-thumb" class="absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 border-white shadow-md pointer-events-none" style="box-shadow: 0 0 0 1px rgba(0,0,0,0.45);"></div>
+      </div>
+
+      <div id="cp-hue-bar" class="relative w-full h-4 rounded-full cursor-pointer border border-dark-outline" style="background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);">
+        <div id="cp-hue-thumb" class="absolute top-1/2 w-5 h-5 -ml-2.5 -translate-y-1/2 rounded-full border-2 border-white shadow-md pointer-events-none" style="box-shadow: 0 0 0 1px rgba(0,0,0,0.45);"></div>
+      </div>
+
+      <div class="flex items-center justify-between gap-gutter-sm bg-dark-surface-elevated border border-dark-outline rounded-sm p-2.5">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div id="cp-preview-dot" class="w-8 h-8 rounded-full border border-dark-outline shrink-0"></div>
+          <div class="flex flex-col min-w-0">
+            <input id="cp-hex-input" type="text" maxlength="7" value="#3B82F6" class="w-24 bg-transparent font-mono text-mono-sm text-dark-on-surface uppercase focus:outline-none border-b border-transparent focus:border-electric-blue">
+            <span id="cp-rgb-label" class="font-mono text-[10px] text-dark-on-surface-muted tabular-nums">RGB(59, 130, 246)</span>
+          </div>
+        </div>
+        <span id="cp-contrast-badge" class="px-2 py-0.5 rounded-full font-label text-[10px] border">Buen contraste</span>
+      </div>
+
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-label text-[11px] text-dark-on-surface-muted">Recientes</span>
+        <div id="cp-recents-row" class="flex items-center gap-1.5"></div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button id="btn-cancel-custom-color" type="button" class="h-8 px-3 rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline">Cancelar</button>
+        <button id="btn-apply-custom-color" type="button" class="h-8 px-3 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-md hover:opacity-95">Aplicar color</button>
       </div>
     </div>
   </div>
@@ -897,11 +1001,11 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         wifi_direct: 'Wi-Fi Direct'
       };
 
-      const qrMethodIcons = {
-        relay: 'link',
-        bluetooth: 'bluetooth',
-        tcp: 'wifi',
-        wifi_direct: 'wifi_tethering'
+      const qrMethodSvgPaths = {
+        relay: 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',
+        bluetooth: 'M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z',
+        tcp: 'M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z',
+        wifi_direct: 'M12 11c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 2c0-3.31-2.69-6-6-6s-6 2.69-6 6c0 2.22 1.21 4.15 3 5.19l1-1.74c-1.19-.7-2-1.97-2-3.45 0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.48-.81 2.75-2 3.45l1 1.74c1.79-1.04 3-2.97 3-5.19zM12 3C6.48 3 2 7.48 2 13c0 3.7 2.01 6.92 4.99 8.65l1-1.73C5.61 18.53 4 15.96 4 13c0-4.42 3.58-8 8-8s8 3.58 8 8c0 2.96-1.61 5.53-4 6.92l1 1.73c2.99-1.73 5-4.95 5-8.65 0-5.52-4.48-10-10-10z'
       };
 
       function formatCountdown(secs) {
@@ -934,13 +1038,14 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             }
             const qrBox = document.getElementById('qr-svg-container');
             qrBox.innerHTML = res.svg;
-            const qrIconName = qrMethodIcons[method] || 'qr_code';
+            const qrPathD = qrMethodSvgPaths[method] || qrMethodSvgPaths.tcp;
             const badgeOverlay = document.createElement('div');
             badgeOverlay.className = 'absolute inset-0 flex items-center justify-center pointer-events-none';
             badgeOverlay.innerHTML =
-              '<div class="w-8 h-8 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center">' +
-              '<span class="material-symbols-outlined text-[18px] text-electric-blue" aria-hidden="true">' + qrIconName + '</span>' +
-              '</div>';
+              '<svg viewBox="0 0 24 24" class="w-11 h-11 overflow-visible" aria-hidden="true">' +
+              '<path d="' + qrPathD + '" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6.5" stroke-linejoin="round" stroke-linecap="round"></path>' +
+              '<path d="' + qrPathD + '" fill="var(--nb-accent)" stroke="var(--nb-accent)" stroke-width="0.6" stroke-linejoin="round"></path>' +
+              '</svg>';
             qrBox.appendChild(badgeOverlay);
             document.getElementById('qr-token-label').textContent = res.pair_token;
             currentShareLink = res.share_link || null;
@@ -1614,14 +1719,105 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               currentInvalidDeviceId = null;
               invalidModal.classList.add('hidden');
             }
+
+            if (s.updates) {
+              const upd = s.updates;
+              const hdrTitle = document.getElementById('header-app-title');
+              if (hdrTitle && upd.app_display_name) hdrTitle.textContent = upd.app_display_name;
+              const settingsBadge = document.getElementById('btn-open-settings-badge');
+              const hasAnyUpdate = upd.app_status === 'available' || upd.app_status === 'installed_restart' || upd.driver_status === 'available';
+              if (settingsBadge) settingsBadge.classList.toggle('hidden', !hasAnyUpdate);
+
+              const updAppTitle = document.getElementById('upd-app-title');
+              if (updAppTitle) updAppTitle.textContent = (upd.app_display_name || 'NFC Bridge Sync') + ' v' + (upd.app_version || '');
+              const updModeChip = document.getElementById('upd-app-mode-chip');
+              if (updModeChip) updModeChip.textContent = upd.is_portable ? 'Portable' : 'Instalado';
+              const updAppMsg = document.getElementById('upd-app-status-msg');
+              if (updAppMsg) {
+                updAppMsg.textContent = upd.app_message || '';
+                updAppMsg.className = 'font-body text-[11px] truncate ' + (upd.app_status === 'available' || upd.app_status === 'installed_restart' ? 'text-electric-blue' : 'text-dark-on-surface-muted');
+              }
+              const btnActApp = document.getElementById('btn-action-update-app');
+              if (btnActApp) {
+                if (upd.app_status === 'installed_restart' || upd.pending_restart) {
+                  btnActApp.textContent = 'Reiniciar ahora';
+                  btnActApp.classList.remove('hidden');
+                  btnActApp.disabled = false;
+                } else if (upd.app_status === 'available') {
+                  btnActApp.textContent = 'Descargar e instalar';
+                  btnActApp.classList.remove('hidden');
+                  btnActApp.disabled = false;
+                } else if (upd.app_status === 'downloading') {
+                  btnActApp.textContent = 'Descargando...';
+                  btnActApp.classList.remove('hidden');
+                  btnActApp.disabled = true;
+                } else {
+                  btnActApp.classList.add('hidden');
+                }
+              }
+
+              const drvVerChip = document.getElementById('upd-driver-version-chip');
+              if (drvVerChip) drvVerChip.textContent = upd.driver_version ? ('v' + upd.driver_version) : 'No detectado';
+              const updDrvMsg = document.getElementById('upd-driver-status-msg');
+              if (updDrvMsg) {
+                updDrvMsg.textContent = upd.driver_message || '';
+                updDrvMsg.className = 'font-body text-[11px] truncate ' + (upd.driver_status === 'available' ? 'text-electric-blue' : 'text-dark-on-surface-muted');
+              }
+              const btnActDrv = document.getElementById('btn-action-update-driver');
+              if (btnActDrv) {
+                if (upd.driver_status === 'available') {
+                  btnActDrv.textContent = 'Instalar driver';
+                  btnActDrv.classList.remove('hidden');
+                  btnActDrv.disabled = false;
+                } else if (upd.driver_status === 'downloading') {
+                  btnActDrv.textContent = 'Descargando...';
+                  btnActDrv.classList.remove('hidden');
+                  btnActDrv.disabled = true;
+                } else {
+                  btnActDrv.classList.add('hidden');
+                }
+              }
+
+              const restartModal = document.getElementById('restart-required-modal');
+              if (restartModal) {
+                if (upd.pending_restart && !restartDismissedByUser) {
+                  restartModal.classList.remove('hidden');
+                } else if (!upd.pending_restart) {
+                  restartModal.classList.add('hidden');
+                }
+              }
+            }
+
+            const btnAutoUpdApp = document.getElementById('btn-toggle-auto-update-app');
+            if (btnAutoUpdApp) {
+              const on = !!uiSettingsState.auto_update_app;
+              btnAutoUpdApp.textContent = on ? 'Auto: Activado' : 'Auto: Desactivado';
+              btnAutoUpdApp.setAttribute('aria-checked', on ? 'true' : 'false');
+              btnAutoUpdApp.className = on
+                ? 'h-7 px-2.5 rounded-sm bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft font-label text-[11px] shrink-0 transition-colors'
+                : 'h-7 px-2.5 rounded-sm bg-dark-surface border border-dark-outline text-dark-on-surface-muted font-label text-[11px] shrink-0 transition-colors';
+            }
+            const btnAutoUpdDrv = document.getElementById('btn-toggle-auto-update-driver');
+            if (btnAutoUpdDrv) {
+              const on = !!uiSettingsState.auto_update_driver;
+              btnAutoUpdDrv.textContent = on ? 'Auto: Activado' : 'Auto: Desactivado';
+              btnAutoUpdDrv.setAttribute('aria-checked', on ? 'true' : 'false');
+              btnAutoUpdDrv.className = on
+                ? 'h-7 px-2.5 rounded-sm bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft font-label text-[11px] shrink-0 transition-colors'
+                : 'h-7 px-2.5 rounded-sm bg-dark-surface border border-dark-outline text-dark-on-surface-muted font-label text-[11px] shrink-0 transition-colors';
+            }
           })
           .catch(function () {});
       }
 
+      let restartDismissedByUser = false;
+
       let uiSettingsState = {
         theme_mode: 'dark',
         use_windows_accent: false,
-        custom_accent_hex: '#3B82F6'
+        custom_accent_hex: '#3B82F6',
+        auto_update_app: false,
+        auto_update_driver: false
       };
       let windowsAccentHex = '#3B82F6';
       let autoAcceptMobileSwitchState = false;
@@ -1685,13 +1881,215 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             ? 'h-7 px-2.5 rounded-sm bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft font-label text-[11px] transition-colors'
             : 'h-7 px-2.5 rounded-sm bg-dark-surface border border-dark-outline text-dark-on-surface-muted font-label text-[11px] transition-colors';
         }
-        const customInput = document.getElementById('settings-custom-color');
-        const customHex = document.getElementById('settings-custom-hex');
-        if (customInput && document.activeElement !== customInput) {
-          customInput.value = uiSettingsState.custom_accent_hex || '#3B82F6';
+        const activePresetHex = (uiSettingsState.custom_accent_hex || '#3B82F6').toUpperCase();
+        const presetColors = ['#3B82F6', '#06B6D4', '#10B981', '#8B5CF6', '#EC4899', '#F59E0B'];
+        let matchedPreset = false;
+        document.querySelectorAll('.accent-preset-btn').forEach(function (btn) {
+          const pHex = (btn.getAttribute('data-accent-preset') || '').toUpperCase();
+          const isSel = !uiSettingsState.use_windows_accent && pHex === activePresetHex;
+          if (isSel) matchedPreset = true;
+          btn.style.boxShadow = isSel
+            ? '0 0 0 2px var(--nb-surface-elevated), 0 0 0 4px ' + pHex
+            : '';
+        });
+
+        const customColorBtn = document.getElementById('btn-open-custom-color');
+        if (customColorBtn) {
+          const isCustomActive = !uiSettingsState.use_windows_accent && !matchedPreset;
+          if (isCustomActive) {
+            customColorBtn.style.backgroundColor = activePresetHex;
+            customColorBtn.style.borderColor = '#FFFFFF';
+            customColorBtn.style.boxShadow = '0 0 0 3px ' + activePresetHex;
+            customColorBtn.style.color = lum > 0.62 ? '#111827' : '#FFFFFF';
+          } else {
+            customColorBtn.style.backgroundColor = '';
+            customColorBtn.style.borderColor = '';
+            customColorBtn.style.boxShadow = '';
+            customColorBtn.style.color = '';
+          }
         }
-        if (customHex) customHex.textContent = (uiSettingsState.custom_accent_hex || '#3B82F6').toUpperCase();
       }
+
+      const PRESET_RECENTS = ['#06B6D4', '#10B981', '#8B5CF6', '#EC4899', '#F59E0B'];
+      let recentAccentColors = PRESET_RECENTS.slice();
+      try {
+        const storedRecents = JSON.parse(localStorage.getItem('nb_recent_accents') || 'null');
+        if (Array.isArray(storedRecents) && storedRecents.length > 0) recentAccentColors = storedRecents.slice(0, 5);
+      } catch (_) {}
+
+      let cpHue = 217;
+      let cpSat = 0.76;
+      let cpVal = 0.96;
+
+      function rgbToHsv(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        const d = max - min;
+        let h = 0;
+        const s = max === 0 ? 0 : d / max;
+        const v = max;
+        if (d !== 0) {
+          switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+          }
+          h *= 60;
+        }
+        return [h, s, v];
+      }
+
+      function hsvToRgb(h, s, v) {
+        const c = v * s;
+        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+        const m = v - c;
+        let r = 0, g = 0, b = 0;
+        if (h < 60) { r = c; g = x; b = 0; }
+        else if (h < 120) { r = x; g = c; b = 0; }
+        else if (h < 180) { r = 0; g = c; b = x; }
+        else if (h < 240) { r = 0; g = x; b = c; }
+        else if (h < 300) { r = x; g = 0; b = c; }
+        else { r = c; g = 0; b = x; }
+        return [
+          Math.round((r + m) * 255),
+          Math.round((g + m) * 255),
+          Math.round((b + m) * 255)
+        ];
+      }
+
+      function rgbToHex(r, g, b) {
+        return '#' + [r, g, b].map(function (n) { return n.toString(16).padStart(2, '0'); }).join('').toUpperCase();
+      }
+
+      function renderColorPickerUi(skipHexInputUpdate) {
+        const svBox = document.getElementById('cp-sv-box');
+        const svThumb = document.getElementById('cp-sv-thumb');
+        const hueThumb = document.getElementById('cp-hue-thumb');
+        const previewDot = document.getElementById('cp-preview-dot');
+        const hexInput = document.getElementById('cp-hex-input');
+        const rgbLabel = document.getElementById('cp-rgb-label');
+        const contrastBadge = document.getElementById('cp-contrast-badge');
+
+        const pureHueRgb = hsvToRgb(cpHue, 1, 1);
+        const rgb = hsvToRgb(cpHue, cpSat, cpVal);
+        const hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+
+        svBox.style.backgroundColor = 'rgb(' + pureHueRgb.join(',') + ')';
+        svThumb.style.left = (cpSat * 100) + '%';
+        svThumb.style.top = ((1 - cpVal) * 100) + '%';
+        svThumb.style.backgroundColor = hex;
+
+        hueThumb.style.left = ((cpHue / 360) * 100) + '%';
+        hueThumb.style.backgroundColor = 'rgb(' + pureHueRgb.join(',') + ')';
+
+        previewDot.style.backgroundColor = hex;
+        if (!skipHexInputUpdate && document.activeElement !== hexInput) {
+          hexInput.value = hex;
+        }
+        rgbLabel.textContent = 'RGB(' + rgb[0] + ', ' + rgb[1] + ', ' + rgb[2] + ')';
+
+        const lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+        if (lum >= 0.28 && lum <= 0.85) {
+          contrastBadge.textContent = 'Buen contraste';
+          contrastBadge.className = 'px-2 py-0.5 rounded-full font-label text-[10px] border border-led-green/40 bg-led-green/10 text-led-green';
+        } else {
+          contrastBadge.textContent = 'Contraste extremo';
+          contrastBadge.className = 'px-2 py-0.5 rounded-full font-label text-[10px] border border-amber-pause/40 bg-amber-pause-soft text-amber-pause';
+        }
+      }
+
+      function renderColorPickerRecents() {
+        const row = document.getElementById('cp-recents-row');
+        row.replaceChildren();
+        recentAccentColors.forEach(function (hex) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.title = hex;
+          b.className = 'w-5 h-5 rounded-full border border-white/25 hover:scale-110 transition-transform';
+          b.style.backgroundColor = hex;
+          b.addEventListener('click', function () {
+            const rgb = parseHexRgb(hex);
+            const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+            cpHue = hsv[0]; cpSat = hsv[1]; cpVal = hsv[2];
+            renderColorPickerUi(false);
+          });
+          row.appendChild(b);
+        });
+      }
+
+      function openCustomColorModal() {
+        const rgb = parseHexRgb(uiSettingsState.custom_accent_hex || '#3B82F6');
+        const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+        cpHue = (hsv[0] === 0 && hsv[1] === 0) ? 217 : hsv[0];
+        cpSat = Math.max(0.05, hsv[1]);
+        cpVal = Math.max(0.15, hsv[2]);
+        renderColorPickerRecents();
+        renderColorPickerUi(false);
+        document.getElementById('custom-color-modal').classList.remove('hidden');
+      }
+
+      function attachDragTracker(el, onMove) {
+        let dragging = false;
+        function updateFromEvent(ev) {
+          const rect = el.getBoundingClientRect();
+          const x = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+          const y = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
+          onMove(x, y);
+        }
+        el.addEventListener('pointerdown', function (ev) {
+          dragging = true;
+          el.setPointerCapture(ev.pointerId);
+          updateFromEvent(ev);
+        });
+        el.addEventListener('pointermove', function (ev) {
+          if (dragging) updateFromEvent(ev);
+        });
+        el.addEventListener('pointerup', function () { dragging = false; });
+        el.addEventListener('pointercancel', function () { dragging = false; });
+      }
+
+      attachDragTracker(document.getElementById('cp-sv-box'), function (x, y) {
+        cpSat = x;
+        cpVal = 1 - y;
+        renderColorPickerUi(false);
+      });
+      attachDragTracker(document.getElementById('cp-hue-bar'), function (x) {
+        cpHue = x * 360;
+        renderColorPickerUi(false);
+      });
+
+      document.getElementById('cp-hex-input').addEventListener('input', function (ev) {
+        const raw = ev.target.value.trim();
+        if (/^#?[0-9a-fA-F]{6}$/.test(raw)) {
+          const rgb = parseHexRgb(raw);
+          const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+          cpHue = hsv[0]; cpSat = hsv[1]; cpVal = hsv[2];
+          renderColorPickerUi(true);
+        }
+      });
+
+      document.getElementById('btn-reset-custom-color').addEventListener('click', function () {
+        cpHue = 217; cpSat = 0.76; cpVal = 0.96;
+        renderColorPickerUi(false);
+      });
+      document.getElementById('btn-cancel-custom-color').addEventListener('click', function () {
+        document.getElementById('custom-color-modal').classList.add('hidden');
+      });
+      document.getElementById('custom-color-modal').addEventListener('click', function (ev) {
+        if (ev.target.id === 'custom-color-modal') {
+          document.getElementById('custom-color-modal').classList.add('hidden');
+        }
+      });
+      document.getElementById('btn-apply-custom-color').addEventListener('click', function () {
+        const rgb = hsvToRgb(cpHue, cpSat, cpVal);
+        const hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+        recentAccentColors = [hex].concat(recentAccentColors.filter(function (c) { return c.toUpperCase() !== hex; })).slice(0, 5);
+        try { localStorage.setItem('nb_recent_accents', JSON.stringify(recentAccentColors)); } catch (_) {}
+        uiSettingsState.use_windows_accent = false;
+        uiSettingsState.custom_accent_hex = hex;
+        persistUiSettings();
+        document.getElementById('custom-color-modal').classList.add('hidden');
+      });
 
       function persistUiSettings() {
         applyThemeAndAccent();
@@ -1702,7 +2100,9 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             command: 'save_ui_settings',
             theme_mode: uiSettingsState.theme_mode,
             use_windows_accent: uiSettingsState.use_windows_accent,
-            custom_accent_hex: uiSettingsState.custom_accent_hex
+            custom_accent_hex: uiSettingsState.custom_accent_hex,
+            auto_update_app: uiSettingsState.auto_update_app,
+            auto_update_driver: uiSettingsState.auto_update_driver
           })
         }).catch(function () {});
       }
@@ -1738,10 +2138,12 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         });
       });
 
-      document.getElementById('settings-custom-color').addEventListener('input', function (ev) {
-        uiSettingsState.use_windows_accent = false;
-        uiSettingsState.custom_accent_hex = ev.target.value.toUpperCase();
-        persistUiSettings();
+      document.getElementById('btn-open-custom-color').addEventListener('click', function () {
+        openCustomColorModal();
+      });
+
+      document.getElementById('settings-tcp-port').addEventListener('input', function (ev) {
+        ev.target.value = ev.target.value.replace(/[^0-9]/g, '').slice(0, 5);
       });
 
       document.getElementById('btn-toggle-auto-mobile-switch').addEventListener('click', function () {
@@ -1841,6 +2243,54 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: 'dismiss_invalid_pairing', delete_profile: false })
         }).then(refreshState).catch(function () {});
+      });
+
+      document.getElementById('btn-check-updates').addEventListener('click', function () {
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'check_updates' })
+        }).then(function () { setTimeout(refreshState, 300); }).catch(function () {});
+      });
+
+      document.getElementById('btn-toggle-auto-update-app').addEventListener('click', function () {
+        uiSettingsState.auto_update_app = !uiSettingsState.auto_update_app;
+        persistUiSettings();
+      });
+
+      document.getElementById('btn-toggle-auto-update-driver').addEventListener('click', function () {
+        uiSettingsState.auto_update_driver = !uiSettingsState.auto_update_driver;
+        persistUiSettings();
+      });
+
+      document.getElementById('btn-action-update-app').addEventListener('click', function (ev) {
+        const isRestart = (ev.target.textContent || '').toLowerCase().includes('reiniciar');
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: isRestart ? 'restart_app' : 'install_app_update' })
+        }).then(refreshState).catch(function () {});
+      });
+
+      document.getElementById('btn-action-update-driver').addEventListener('click', function () {
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'install_driver_update' })
+        }).then(refreshState).catch(function () {});
+      });
+
+      document.getElementById('btn-dismiss-restart').addEventListener('click', function () {
+        restartDismissedByUser = true;
+        document.getElementById('restart-required-modal').classList.add('hidden');
+      });
+
+      document.getElementById('btn-restart-now').addEventListener('click', function () {
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'restart_app' })
+        }).catch(function () {});
       });
 
       if (window.matchMedia) {
