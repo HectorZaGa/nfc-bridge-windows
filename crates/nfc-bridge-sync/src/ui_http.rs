@@ -3,7 +3,7 @@
 //! comandos en tiempo real hacia `nfc-bridge-driver` vía IPC Named Pipe.
 
 use qrcode::render::svg;
-use qrcode::QrCode;
+use qrcode::{EcLevel, QrCode};
 use serde::Deserialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -70,7 +70,8 @@ impl DesktopUiServer {
 }
 
 pub fn render_qr_svg(payload: &str) -> Result<String, String> {
-    let code = QrCode::new(payload.as_bytes()).map_err(|e| e.to_string())?;
+    let code = QrCode::with_error_correction_level(payload.as_bytes(), EcLevel::H)
+        .map_err(|e| e.to_string())?;
     let image = code
         .render::<svg::Color>()
         .min_dimensions(184, 184)

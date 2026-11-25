@@ -700,10 +700,18 @@ impl DriverIpcClient {
                     st.tag_present = true;
                     st.tag_uid = Some(uid.clone());
                 }
-                info!(
-                    "[Driver] Etiqueta NFC detectada: UID={} | Techs={:?} | NTAG215={}",
-                    uid, technologies, is_ntag215
-                );
+                let tag_type = if is_ntag215 || technologies.iter().any(|t| t == "MifareUltralight") {
+                    "NTAG / Ultralight (ISO 14443-3A)".to_string()
+                } else if technologies.iter().any(|t| t == "IsoDep") {
+                    "ISO-DEP / Tarjeta inteligente (ISO 14443-4)".to_string()
+                } else if technologies.iter().any(|t| t == "NfcA") {
+                    "ISO 14443-3A (NfcA)".to_string()
+                } else if technologies.is_empty() {
+                    "Etiqueta NFC".to_string()
+                } else {
+                    technologies.join(", ")
+                };
+                info!("[Driver] Etiqueta NFC detectada: {}", tag_type);
             }
             IpcEvent::TagDetached => {
                 {

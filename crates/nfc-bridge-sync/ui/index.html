@@ -277,7 +277,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         <!-- CASO 1: ENLACE REMOTO (Relay Cloud fuera de la misma red Wi-Fi) -->
         <div id="panel-relay" class="conn-detail-panel hidden min-w-0 flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
-            <span class="font-headline text-title-md text-dark-on-surface">Enlace remoto (Nube)</span>
+            <span class="font-headline text-title-md text-dark-on-surface">Enlace remoto</span>
             <span id="relay-status-pill" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-muted shrink-0">Sin Relay</span>
           </div>
 
@@ -505,7 +505,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             <span id="qr-method-badge" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border font-label text-[11px] text-on-electric-blue-soft">TCP</span>
           </div>
 
-          <div id="qr-svg-container" class="bg-white p-2.5 rounded-DEFAULT shadow-sm flex items-center justify-center w-44 h-44"></div>
+          <div id="qr-svg-container" class="relative bg-white p-2.5 rounded-DEFAULT shadow-sm flex items-center justify-center w-44 h-44"></div>
 
           <div class="w-full flex flex-col gap-1">
             <div class="w-full bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-1.5 flex items-center justify-between gap-gutter-sm">
@@ -730,6 +730,13 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         wifi_direct: 'Wi-Fi Direct'
       };
 
+      const qrMethodIcons = {
+        relay: 'link',
+        bluetooth: 'bluetooth',
+        tcp: 'wifi',
+        wifi_direct: 'wifi_tethering'
+      };
+
       function formatCountdown(secs) {
         const m = Math.floor(secs / 60);
         const s = String(secs % 60).padStart(2, '0');
@@ -758,7 +765,16 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               box.appendChild(span);
               return;
             }
-            document.getElementById('qr-svg-container').innerHTML = res.svg;
+            const qrBox = document.getElementById('qr-svg-container');
+            qrBox.innerHTML = res.svg;
+            const qrIconName = qrMethodIcons[method] || 'qr_code';
+            const badgeOverlay = document.createElement('div');
+            badgeOverlay.className = 'absolute inset-0 flex items-center justify-center pointer-events-none';
+            badgeOverlay.innerHTML =
+              '<div class="w-8 h-8 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center">' +
+              '<span class="material-symbols-outlined text-[18px] text-electric-blue" aria-hidden="true">' + qrIconName + '</span>' +
+              '</div>';
+            qrBox.appendChild(badgeOverlay);
             document.getElementById('qr-token-label').textContent = res.pair_token;
             currentShareLink = res.share_link || null;
             const shareBtn = document.getElementById('btn-copy-share-link');
