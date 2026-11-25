@@ -19,6 +19,7 @@ use crate::driver_manager::DRIVER_NAMED_PIPE;
 #[serde(tag = "command", content = "params")]
 pub enum IpcCommand {
     GetStatus,
+    GetWifiDirectInfo,
     SetPaused { paused: bool },
     SetUsbPriority { enabled: bool },
     DisconnectDevice,
@@ -34,6 +35,16 @@ pub enum IpcEvent {
         paused: bool,
         tag_present: bool,
         tag_uid: Option<String>,
+    },
+    WifiDirectStatus {
+        available: bool,
+        active: bool,
+        pc_name: String,
+        ssid: Option<String>,
+        passphrase: Option<String>,
+        ip: Option<String>,
+        port: u16,
+        reason: Option<String>,
     },
     DeviceConnected {
         device_name: String,
@@ -156,9 +167,97 @@ impl DriverIpcClient {
                 info!("[Driver] Etiqueta NFC retirada del campo.");
             }
             IpcEvent::LatencyUpdated { .. } => {}
+            IpcEvent::WifiDirectStatus {
+                available,
+                active,
+                pc_name,
+                ssid,
+                passphrase,
+                ip,
+                port,
+                reason,
+            } => {
+                if available && active {
+                    if let (Some(ssid), Some(pass)) = (ssid.as_deref(), passphrase.as_deref()) {
+                        let target_ip = ip.as_deref().unwrap_or("192.168.137.1");
+                        let qr_uri =
+                            build_wifi_direct_qr_uri(target_ip, port, &pc_name, ssid, pass);
+                        info!(
+                            "[Driver] Wi-Fi Direct activo | SSID='{}' | Clave='{}' | Enlace QR: {}",
+                            ssid, pass, qr_uri
+                        );
+                    }
+                } else if let Some(msg) = reason {
+                    info!("[Driver] Wi-Fi Direct no disponible: {}", msg);
+                }
+            }
             IpcEvent::Error { message } => {
                 warn!("[Driver Error] {}", message);
             }
+        }
+    }
+}
+
+/// Construye el URI estándar `nfcbridge://` con parámetros de Wi-Fi Direct (SoftAP + TCP) para QR.
+pub fn build_wifi_direct_qr_uri(
+    ip: &str,
+    port: u16,
+    pc_name: &str,
+    ssid: &str,
+    passphrase: &str,
+) -> String {
+    format!(
+        "nfcbridge://{}:{}?name={}&transport=wifi_direct&ssid={}&pass={}",
+        ip,
+        port,
+        percent_encode_query(pc_name),
+        percent_encode_query(ssid),
+        percent_encode_query(passphrase),
+    )
+}
+
+fn percent_encode_query(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for byte in raw.as_bytes() {
+        let ch = *byte as char;
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '~') {
+            out.push(ch);
+        } else {
+            out.push_str(&format!("%{:02X}", byte));
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wifi_direct_qr_uri_encoding() {
+        let uri = build_wifi_direct_qr_uri(
+            "192.168.137.1",
+            45362,
+            "HECTOR MASTER",
+            "DIRECT-NB-HECTOR",
+            "Abc123XY",
+        );
+        assert_eq!(
+            uri,
+            "nfcbridge://192.168.137.1:45362?name=HECTOR%20MASTER&transport=wifi_direct&ssid=DIRECT-NB-HECTOR&pass=Abc123XY"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_wifi_direct_status_event() {
+        let raw = r#"{"event":"WifiDirectStatus","data":{"available":true,"active":true,"pc_name":"PC","ssid":"DIRECT-NB-PC","passphrase":"Pass1234","ip":"192.168.137.1","port":45362,"reason":null}}"#;
+        let parsed: IpcEvent = serde_json::from_str(raw).expect("valid WifiDirectStatus JSON");
+        match parsed {
+            IpcEvent::WifiDirectStatus { available, ssid, .. } => {
+                assert!(available);
+                assert_eq!(ssid.as_deref(), Some("DIRECT-NB-PC"));
+            }
+            other => panic!("unexpected variant: {:?}", other),
         }
     }
 }
