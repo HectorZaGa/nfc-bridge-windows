@@ -22,6 +22,12 @@ pub struct TrustedDeviceInfo {
     pub device_id: String,
     pub device_name: String,
     pub created_unix: u64,
+    #[serde(default)]
+    pub mobile_id: Option<String>,
+    #[serde(default)]
+    pub transport: Option<String>,
+    #[serde(default)]
+    pub endpoint: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -44,6 +50,7 @@ pub enum IpcCommand {
     SetBluetoothEnabled { enabled: bool },
     DisconnectDevice,
     RevokeTrustedDevice { device_id: String },
+    RenameTrustedDevice { device_id: String, name: String },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -56,6 +63,12 @@ pub enum IpcEvent {
         paused: bool,
         tag_present: bool,
         tag_uid: Option<String>,
+        #[serde(default)]
+        transport: Option<String>,
+        #[serde(default)]
+        mobile_id: Option<String>,
+        #[serde(default)]
+        active_device_id: Option<String>,
     },
     WifiDirectStatus {
         available: bool,
@@ -198,8 +211,13 @@ pub struct DesktopLiveState {
     pub connected: bool,
     pub device_name: Option<String>,
     pub endpoint: Option<String>,
+    pub transport: Option<String>,
+    pub mobile_id: Option<String>,
+    pub active_device_id: Option<String>,
     pub last_device_name: Option<String>,
     pub last_endpoint: Option<String>,
+    pub last_transport: Option<String>,
+    pub last_mobile_id: Option<String>,
     pub latency_ms: u64,
     pub paused: bool,
     pub tag_present: bool,
@@ -216,8 +234,13 @@ impl Default for DesktopLiveState {
             connected: false,
             device_name: None,
             endpoint: None,
+            transport: None,
+            mobile_id: None,
+            active_device_id: None,
             last_device_name: None,
             last_endpoint: None,
+            last_transport: None,
+            last_mobile_id: None,
             latency_ms: 0,
             paused: false,
             tag_present: false,
@@ -383,13 +406,25 @@ impl DriverIpcClient {
                 paused,
                 tag_present,
                 tag_uid,
+                transport,
+                mobile_id,
+                active_device_id,
             } => {
                 {
                     let mut st = self.state.write().await;
                     st.connected = connected;
                     st.device_name = device_name.clone();
+                    st.transport = transport.clone();
+                    st.mobile_id = mobile_id.clone();
+                    st.active_device_id = active_device_id;
                     if let Some(ref name) = device_name {
                         st.last_device_name = Some(name.clone());
+                    }
+                    if let Some(ref tr) = transport {
+                        st.last_transport = Some(tr.clone());
+                    }
+                    if let Some(ref mid) = mobile_id {
+                        st.last_mobile_id = Some(mid.clone());
                     }
                     st.latency_ms = latency_ms;
                     st.paused = paused;

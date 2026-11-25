@@ -25,6 +25,8 @@ struct CommandRequest {
     #[serde(default)]
     device_id: Option<String>,
     #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
     enabled: Option<bool>,
 }
 
@@ -294,10 +296,28 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                                 .await;
                             if r.is_ok() {
                                 let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                             }
                             r
                         }
                         None => Err(anyhow::anyhow!("Falta device_id")),
+                    },
+                    "rename" => match (
+                        req.device_id.filter(|id| !id.trim().is_empty()),
+                        req.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()),
+                    ) {
+                        (Some(device_id), Some(name)) => {
+                            let r = ipc
+                                .send_command(IpcCommand::RenameTrustedDevice { device_id, name })
+                                .await;
+                            if r.is_ok() {
+                                let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                                let _ = ipc.send_command(IpcCommand::GetStatus).await;
+                                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                            }
+                            r
+                        }
+                        _ => Err(anyhow::anyhow!("Falta device_id o name")),
                     },
                     _ => Err(anyhow::anyhow!("Comando desconocido")),
                 };

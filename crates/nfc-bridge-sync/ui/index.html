@@ -107,6 +107,13 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       padding: 0;
       background: transparent;
     }
+    @keyframes spinOnce {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin-once {
+      animation: spinOnce 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    }
   </style>
 </head>
 <body class="text-dark-on-surface antialiased selection:bg-electric-blue-soft selection:text-on-electric-blue-soft inline-block">
@@ -162,6 +169,9 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <div class="flex items-center gap-1.5 min-w-0">
                   <span id="active-device-name" class="font-headline text-title-md text-dark-on-surface-card truncate" data-design-text-token="title-md">Sin dispositivo</span>
                   <span id="active-device-led" class="w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0" title="Desconectado" aria-label="Desconectado"></span>
+                  <span id="active-transport-capsule" class="hidden inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft shrink-0" title="Modo de conexión">
+                    <span id="active-transport-capsule-icon" class="material-symbols-outlined text-[13px]" aria-hidden="true">usb</span>
+                  </span>
                   <span id="device-dropdown-chevron" class="hidden material-symbols-outlined text-title-md text-dark-on-surface-muted transition-transform duration-state-change shrink-0" aria-hidden="true">expand_more</span>
                 </div>
                 <span id="active-device-meta" class="font-label text-label-md text-dark-on-surface-muted tabular-nums truncate" data-design-text-token="label-md">Elige una opción y genera su QR</span>
@@ -180,8 +190,8 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             </div>
           </div>
 
-          <!-- Menú desplegable de dispositivos vinculados (dinámico desde Sync/Driver) -->
-          <div id="device-dropdown-menu" role="listbox" aria-label="Dispositivos vinculados" class="hidden absolute left-0 right-0 top-full mt-1 z-30 bg-dark-surface-card border border-dark-outline rounded-md p-1.5 shadow-2xl flex flex-col gap-1 max-h-60 overflow-y-auto">
+          <!-- Menú desplegable de dispositivos vinculados (dinámico desde Sync/Driver con animación) -->
+          <div id="device-dropdown-menu" role="listbox" aria-label="Dispositivos vinculados" class="absolute left-0 right-0 top-full mt-1 z-30 bg-dark-surface-card border border-dark-outline rounded-md p-1.5 shadow-2xl flex flex-col gap-1 max-h-60 overflow-y-auto origin-top transition-all duration-surface-enter ease-surface-enter opacity-0 -translate-y-1.5 scale-[0.98] pointer-events-none invisible">
             <div class="px-gutter-md py-2 text-center font-label text-label-md text-dark-on-surface-muted">Sin dispositivos vinculados todavía</div>
           </div>
         </section>
@@ -288,7 +298,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             <div id="relay-live-link-box" class="hidden min-w-0 overflow-hidden bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-2 flex flex-col gap-1">
               <div class="flex items-center justify-between gap-2 min-w-0">
                 <span class="font-label text-[11px] text-dark-on-surface-muted">Enlace temporal activo</span>
-                <span id="relay-live-countdown" class="font-mono text-[11px] text-electric-blue tabular-nums shrink-0">5:00</span>
+                <span id="relay-live-countdown" class="font-mono text-[11px] text-electric-blue tabular-nums shrink-0">1:30</span>
               </div>
               <div class="flex items-center justify-between gap-2 min-w-0">
                 <span id="relay-live-link-text" class="font-mono text-[11px] text-dark-on-surface truncate min-w-0 flex-1">https://...</span>
@@ -297,14 +307,14 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             </div>
 
             <p class="font-body text-[11px] text-dark-on-surface-muted">
-              Conecta desde datos móviles (4G/5G) u otra red mediante un enlace efímero que se renueva cada 5 minutos.
+              Conecta desde datos móviles (4G/5G) u otra red mediante un enlace cifrado que se renueva cada 90 segundos.
             </p>
           </div>
 
           <div class="flex flex-col gap-gutter-xs">
             <button id="btn-refresh-relay-link" type="button" class="w-full h-9 rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center justify-center gap-1.5 hover:border-electric-blue transition-colors">
-              <span class="material-symbols-outlined text-title-md text-electric-blue" aria-hidden="true">refresh</span>
-              <span>Generar otro enlace</span>
+              <span id="btn-refresh-relay-link-icon" class="material-symbols-outlined text-title-md text-electric-blue" aria-hidden="true">refresh</span>
+              <span id="btn-refresh-relay-link-label">Generar otro enlace</span>
             </button>
             <button type="button" data-qr-method="relay" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
               <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
@@ -540,15 +550,41 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       const btnDropdown = document.getElementById('btn-device-dropdown');
       const dropdownMenu = document.getElementById('device-dropdown-menu');
       const dropdownChevron = document.getElementById('device-dropdown-chevron');
+      const activeTransportCapsule = document.getElementById('active-transport-capsule');
+      const activeTransportCapsuleIcon = document.getElementById('active-transport-capsule-icon');
       let isDropdownOpen = false;
       let hasDevicesInList = false;
+      let editingDeviceId = null;
+
+      function getTransportMeta(transportRaw, endpointRaw) {
+        const raw = (transportRaw || endpointRaw || '').toLowerCase();
+        if (raw.includes('usb')) return { icon: 'usb', label: 'USB' };
+        if (raw.includes('bluetooth') || raw === 'bt') return { icon: 'bluetooth', label: 'Bluetooth' };
+        if (raw.includes('relay')) return { icon: 'link', label: 'Enlace remoto' };
+        if (raw.includes('wifi_direct') || raw.includes('wifi-direct') || raw.includes('192.168.137.') || raw.includes('192.168.49.')) {
+          return { icon: 'wifi_tethering', label: 'Wi-Fi Direct' };
+        }
+        return { icon: 'wifi', label: 'Red Local (TCP)' };
+      }
 
       function setDropdownOpen(open) {
         if (open && !hasDevicesInList) {
           open = false;
         }
         isDropdownOpen = open;
-        dropdownMenu.classList.toggle('hidden', !open);
+        dropdownMenu.classList.toggle('opacity-100', open);
+        dropdownMenu.classList.toggle('translate-y-0', open);
+        dropdownMenu.classList.toggle('scale-100', open);
+        dropdownMenu.classList.toggle('pointer-events-auto', open);
+        dropdownMenu.classList.toggle('visible', open);
+        dropdownMenu.classList.toggle('opacity-0', !open);
+        dropdownMenu.classList.toggle('-translate-y-1.5', !open);
+        dropdownMenu.classList.toggle('scale-[0.98]', !open);
+        dropdownMenu.classList.toggle('pointer-events-none', !open);
+        dropdownMenu.classList.toggle('invisible', !open);
+        if (!open) {
+          editingDeviceId = null;
+        }
         btnDropdown.setAttribute('aria-expanded', open ? 'true' : 'false');
         dropdownChevron.style.transform = open ? 'rotate(180deg)' : '';
       }
@@ -682,7 +718,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             }
 
             stopQrCountdown();
-            qrSecondsLeft = res.expires_in_secs || 300;
+            qrSecondsLeft = res.expires_in_secs || 30;
             const cdEl = document.getElementById('qr-countdown-label');
             cdEl.textContent = formatCountdown(qrSecondsLeft);
             cdEl.className = 'font-mono text-[11px] text-electric-blue tabular-nums';
@@ -697,7 +733,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 }
               } else {
                 cdEl.textContent = formatCountdown(qrSecondsLeft);
-                cdEl.className = qrSecondsLeft <= 30
+                cdEl.className = qrSecondsLeft <= 10
                   ? 'font-mono text-[11px] text-amber-pause tabular-nums'
                   : 'font-mono text-[11px] text-electric-blue tabular-nums';
               }
@@ -734,9 +770,18 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         }).catch(function () {});
       }
 
+      function triggerRefreshLinkSpin() {
+        const iconEl = document.getElementById('btn-refresh-relay-link-icon');
+        if (!iconEl) return;
+        iconEl.classList.remove('animate-spin-once');
+        void iconEl.offsetWidth;
+        iconEl.classList.add('animate-spin-once');
+      }
+
       document.getElementById('btn-refresh-relay-link').addEventListener('click', function () {
-        liveRelayInFlight = false;
-        refreshLiveRelayLink();
+        if (liveRelayInFlight) return;
+        triggerRefreshLinkSpin();
+        refreshLiveRelayLink(true);
       });
 
       document.getElementById('btn-toggle-bt').addEventListener('click', function () {
@@ -787,25 +832,32 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       let liveRelayTimer = null;
       let liveRelayInFlight = false;
 
-      function refreshLiveRelayLink() {
+      function refreshLiveRelayLink(fromManualClick) {
         if (liveRelayInFlight) return;
         liveRelayInFlight = true;
         fetch('/api/qr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ method: 'relay' })
+          body: JSON.stringify({ method: 'relay_link' })
         })
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (!res || !res.ok || !res.share_link) return;
             liveRelayShareLink = res.share_link;
-            liveRelaySecsLeft = res.expires_in_secs || 300;
+            liveRelaySecsLeft = res.expires_in_secs || 90;
             const box = document.getElementById('relay-live-link-box');
             const textEl = document.getElementById('relay-live-link-text');
             const cdEl = document.getElementById('relay-live-countdown');
             box.classList.remove('hidden');
             textEl.textContent = liveRelayShareLink;
             cdEl.textContent = formatCountdown(liveRelaySecsLeft);
+            if (fromManualClick) {
+              const lbl = document.getElementById('btn-refresh-relay-link-label');
+              if (lbl) {
+                lbl.textContent = 'Enlace renovado';
+                setTimeout(function () { lbl.textContent = 'Generar otro enlace'; }, 1200);
+              }
+            }
             if (liveRelayTimer) clearInterval(liveRelayTimer);
             liveRelayTimer = setInterval(function () {
               liveRelaySecsLeft -= 1;
@@ -813,7 +865,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 clearInterval(liveRelayTimer);
                 liveRelayTimer = null;
                 cdEl.textContent = 'Renovando...';
-                refreshLiveRelayLink();
+                refreshLiveRelayLink(false);
               } else {
                 cdEl.textContent = formatCountdown(liveRelaySecsLeft);
               }
@@ -834,38 +886,52 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       });
 
       function renderDeviceDropdown(s, trustedDevices) {
-        dropdownMenu.replaceChildren();
         const items = [];
         const activeNameVal = s.connected ? (s.device_name || 'Móvil Android') : null;
         const lastKnownName = s.last_device_name || null;
+        let matchedActive = false;
 
         trustedDevices.forEach(function (d) {
-          const isActiveMatch = s.connected && activeNameVal && d.device_name === activeNameVal;
+          let isActiveMatch = false;
+          if (s.connected && !matchedActive) {
+            if (s.active_device_id && d.device_id === s.active_device_id) {
+              isActiveMatch = true;
+            } else if (!s.active_device_id && activeNameVal && d.device_name === activeNameVal && (!d.transport || !s.transport || d.transport === s.transport)) {
+              isActiveMatch = true;
+            }
+          }
+          if (isActiveMatch) matchedActive = true;
           items.push({
             device_id: d.device_id,
             name: d.device_name,
+            mobile_id: d.mobile_id || null,
+            transport: d.transport || (isActiveMatch ? s.transport : null),
             active: isActiveMatch,
             paused: isActiveMatch && !!s.paused,
-            endpoint: isActiveMatch ? (s.endpoint || '') : '',
+            endpoint: isActiveMatch ? (s.endpoint || d.endpoint || '') : (d.endpoint || ''),
             latency_ms: isActiveMatch ? (s.latency_ms || 1) : 0,
             revocable: true
           });
         });
 
-        if (s.connected && activeNameVal && !items.some(function (i) { return i.active; })) {
+        if (s.connected && activeNameVal && !matchedActive) {
           items.unshift({
-            device_id: null,
+            device_id: s.active_device_id || null,
             name: activeNameVal,
+            mobile_id: s.mobile_id || null,
+            transport: s.transport || null,
             active: true,
             paused: !!s.paused,
             endpoint: s.endpoint || '',
             latency_ms: s.latency_ms || 1,
             revocable: false
           });
-        } else if (!s.connected && lastKnownName && !items.some(function (i) { return i.name === lastKnownName; })) {
+        } else if (!s.connected && lastKnownName && items.length === 0) {
           items.unshift({
             device_id: null,
             name: lastKnownName,
+            mobile_id: s.last_mobile_id || null,
+            transport: s.last_transport || null,
             active: false,
             paused: false,
             endpoint: s.last_endpoint || '',
@@ -873,6 +939,12 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             revocable: false
           });
         }
+
+        if (editingDeviceId && items.some(function (i) { return i.device_id === editingDeviceId; })) {
+          return items;
+        }
+        editingDeviceId = null;
+        dropdownMenu.replaceChildren();
 
         if (items.length === 0) {
           const empty = document.createElement('div');
@@ -883,6 +955,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         }
 
         items.forEach(function (item) {
+          const tMeta = getTransportMeta(item.transport, item.endpoint);
           const row = document.createElement('div');
           row.setAttribute('role', 'option');
           row.setAttribute('aria-selected', item.active ? 'true' : 'false');
@@ -896,43 +969,117 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (item.active ? (item.paused ? 'bg-amber-pause' : 'bg-led-green') : 'bg-red-disconnect');
           left.appendChild(dot);
 
+          const modeBadge = document.createElement('span');
+          modeBadge.title = tMeta.label;
+          modeBadge.className = 'w-7 h-7 rounded-sm flex items-center justify-center shrink-0 border ' +
+            (item.active
+              ? 'bg-electric-blue-soft border-electric-blue-border text-electric-blue'
+              : 'bg-dark-surface border-dark-outline text-dark-on-surface-muted');
+          const modeIcon = document.createElement('span');
+          modeIcon.className = 'material-symbols-outlined text-[16px]';
+          modeIcon.textContent = tMeta.icon;
+          modeBadge.appendChild(modeIcon);
+          left.appendChild(modeBadge);
+
           const textCol = document.createElement('div');
           textCol.className = 'flex flex-col min-w-0 flex-1';
 
-          const titleEl = document.createElement('span');
-          titleEl.className = 'font-label text-label-lg text-dark-on-surface truncate';
-          titleEl.textContent = item.name;
-          textCol.appendChild(titleEl);
+          if (editingDeviceId && editingDeviceId === item.device_id) {
+            const editWrap = document.createElement('div');
+            editWrap.className = 'flex items-center gap-1 min-w-0';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = item.name;
+            input.maxLength = 48;
+            input.className = 'w-full min-w-0 h-7 bg-dark-surface border border-electric-blue rounded-sm px-2 font-label text-label-md text-dark-on-surface focus:ring-0';
+            input.addEventListener('click', function (ev) { ev.stopPropagation(); });
+
+            function commitRename() {
+              const newName = input.value.trim();
+              if (!newName) return;
+              editingDeviceId = null;
+              fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: 'rename', device_id: item.device_id, name: newName })
+              }).then(refreshState).catch(function () { refreshState(); });
+            }
+
+            input.addEventListener('keydown', function (ev) {
+              if (ev.key === 'Enter') {
+                ev.preventDefault();
+                commitRename();
+              } else if (ev.key === 'Escape') {
+                ev.preventDefault();
+                editingDeviceId = null;
+                refreshState();
+              }
+            });
+
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.title = 'Guardar nombre';
+            saveBtn.className = 'w-7 h-7 rounded-sm bg-electric-blue text-on-electric-blue inline-flex items-center justify-center shrink-0';
+            saveBtn.innerHTML = '<span class="material-symbols-outlined text-[15px]" aria-hidden="true">check</span>';
+            saveBtn.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              commitRename();
+            });
+
+            editWrap.appendChild(input);
+            editWrap.appendChild(saveBtn);
+            textCol.appendChild(editWrap);
+            setTimeout(function () { input.focus(); input.select(); }, 10);
+          } else {
+            const titleEl = document.createElement('span');
+            titleEl.className = 'font-label text-label-lg text-dark-on-surface truncate';
+            titleEl.textContent = item.name;
+            textCol.appendChild(titleEl);
+          }
 
           const subEl = document.createElement('span');
-          subEl.className = 'font-label text-[11px] text-dark-on-surface-muted truncate';
+          subEl.className = 'font-mono text-[10px] text-dark-on-surface-muted truncate tabular-nums';
+          const idPart = item.mobile_id ? ('ID ' + item.mobile_id) : (item.device_id ? item.device_id : 'Sin ID');
           if (item.active) {
-            subEl.textContent = item.paused
-              ? 'En pausa' + (item.endpoint ? ' • ' + item.endpoint : '')
-              : 'Conectado ahora' + (item.endpoint ? ' • ' + item.endpoint : '') + ' • ' + item.latency_ms + ' ms';
+            subEl.textContent = idPart + ' • ' + (item.paused ? 'En pausa' : (item.latency_ms + ' ms'));
           } else {
-            subEl.textContent = 'Desconectado • Perfil guardado' + (item.endpoint ? ' (' + item.endpoint + ')' : '');
+            subEl.textContent = idPart + ' • Desconectado';
           }
           textCol.appendChild(subEl);
           left.appendChild(textCol);
           row.appendChild(left);
 
           const right = document.createElement('div');
-          right.className = 'flex items-center gap-1.5 shrink-0';
+          right.className = 'flex items-center gap-1 shrink-0';
           if (item.active) {
             const checkIcon = document.createElement('span');
-            checkIcon.className = 'material-symbols-outlined text-title-md text-electric-blue';
+            checkIcon.className = 'material-symbols-outlined text-title-md text-electric-blue mr-0.5';
             checkIcon.textContent = 'check';
             right.appendChild(checkIcon);
           }
           if (item.revocable && item.device_id) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.title = 'Editar nombre del perfil';
+            editBtn.setAttribute('aria-label', 'Editar nombre');
+            editBtn.className = 'w-7 h-7 rounded-sm border border-dark-outline text-dark-on-surface-muted inline-flex items-center justify-center hover:text-electric-blue hover:border-electric-blue transition-colors';
+            editBtn.innerHTML = '<span class="material-symbols-outlined text-[15px]" aria-hidden="true">edit</span>';
+            editBtn.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              editingDeviceId = (editingDeviceId === item.device_id) ? null : item.device_id;
+              renderDeviceDropdown(s, trustedDevices);
+            });
+            right.appendChild(editBtn);
+
             const revokeBtn = document.createElement('button');
             revokeBtn.type = 'button';
-            revokeBtn.title = 'Olvidar y revocar dispositivo';
-            revokeBtn.className = 'px-2 py-1 rounded-sm border border-dark-outline text-[11px] font-label text-dark-on-surface-muted hover:text-red-disconnect hover:border-red-disconnect-border hover:bg-red-disconnect-soft transition-colors';
-            revokeBtn.textContent = 'Olvidar';
+            revokeBtn.title = 'Eliminar perfil';
+            revokeBtn.setAttribute('aria-label', 'Eliminar perfil');
+            revokeBtn.className = 'w-7 h-7 rounded-sm border border-dark-outline text-dark-on-surface-muted inline-flex items-center justify-center hover:text-red-disconnect hover:border-red-disconnect-border hover:bg-red-disconnect-soft transition-colors';
+            revokeBtn.innerHTML = '<span class="material-symbols-outlined text-[15px]" aria-hidden="true">delete</span>';
             revokeBtn.addEventListener('click', function (ev) {
               ev.stopPropagation();
+              editingDeviceId = null;
               fetch('/api/command', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1090,6 +1237,10 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             btnPause.setAttribute('aria-pressed', isPaused ? 'true' : 'false');
 
             if (s.connected) {
+              const tMeta = getTransportMeta(s.transport, s.endpoint);
+              activeTransportCapsuleIcon.textContent = tMeta.icon;
+              activeTransportCapsule.title = tMeta.label;
+              activeTransportCapsule.className = 'inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft shrink-0';
               activeName.textContent = s.device_name || 'Móvil Android';
               activeMeta.textContent = isPaused
                 ? 'Lector NFC en pausa'
@@ -1100,6 +1251,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               activeIcon.className = 'material-symbols-outlined text-electric-blue text-title-lg';
               countBadge.textContent = savedCount > 1 ? ('1 conectado • ' + savedCount + ' guardados') : '1 conectado';
             } else if (!s.driver_online) {
+              activeTransportCapsule.className = 'hidden';
               activeName.textContent = s.last_device_name || (deviceItems[0] ? deviceItems[0].name : 'Driver detenido');
               activeMeta.textContent = 'Inicia el servicio NfcBridgeDriver';
               activeLed.className = 'w-2 h-2 rounded-full bg-red-disconnect shrink-0';
@@ -1109,6 +1261,11 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               countBadge.textContent = savedCount > 0 ? ('0 conectados • ' + savedCount + ' guardados') : '0 conectados';
             } else if (s.last_device_name || deviceItems.length > 0) {
               const savedProfile = s.last_device_name || deviceItems[0].name;
+              const savedTr = s.last_transport || (deviceItems[0] ? deviceItems[0].transport : null);
+              const tMeta = getTransportMeta(savedTr, s.last_endpoint || (deviceItems[0] ? deviceItems[0].endpoint : null));
+              activeTransportCapsuleIcon.textContent = tMeta.icon;
+              activeTransportCapsule.title = tMeta.label;
+              activeTransportCapsule.className = 'inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline text-dark-on-surface-muted shrink-0';
               activeName.textContent = savedProfile;
               activeMeta.textContent = 'Desconectado • Perfil guardado';
               activeLed.className = 'w-2 h-2 rounded-full bg-red-disconnect shrink-0';
@@ -1117,6 +1274,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               activeIcon.className = 'material-symbols-outlined text-dark-on-surface-muted text-title-lg';
               countBadge.textContent = '0 conectados • ' + savedCount + (savedCount === 1 ? ' guardado' : ' guardados');
             } else {
+              activeTransportCapsule.className = 'hidden';
               activeName.textContent = 'Sin dispositivo';
               activeMeta.textContent = 'Elige una opción y genera su QR';
               activeLed.className = 'w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0';
