@@ -24,6 +24,8 @@ struct CommandRequest {
     command: String,
     #[serde(default)]
     device_id: Option<String>,
+    #[serde(default)]
+    enabled: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -184,7 +186,9 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
         }
         ("POST", "/api/qr") => match serde_json::from_str::<QrRequest>(body) {
             Ok(req) => match ipc.request_pairing_qr(&req.method).await {
-                Ok(qr_data) => match render_qr_svg(&qr_data.uri) {
+                Ok(qr_data) => {
+                    let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                    match render_qr_svg(&qr_data.uri) {
                     Ok(svg_markup) => {
                         let json = serde_json::json!({
                             "ok": true,
@@ -203,7 +207,8 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                         "application/json",
                         serde_json::json!({"ok": false, "error": err}).to_string(),
                     ),
-                },
+                    }
+                }
                 Err(err) => (
                     "503 Service Unavailable",
                     "application/json",
@@ -222,6 +227,61 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                     "pause" => ipc.send_command(IpcCommand::SetPaused { paused: true }).await,
                     "resume" => ipc.send_command(IpcCommand::SetPaused { paused: false }).await,
                     "disconnect" => ipc.send_command(IpcCommand::DisconnectDevice).await,
+                    "set_tcp_enabled" => {
+                        let r = ipc
+                            .send_command(IpcCommand::SetTcpEnabled {
+                                enabled: req.enabled.unwrap_or(true),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                        }
+                        r
+                    }
+                    "set_wfd_enabled" => {
+                        let r = ipc
+                            .send_command(IpcCommand::SetWifiDirectEnabled {
+                                enabled: req.enabled.unwrap_or(true),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                        }
+                        r
+                    }
+                    "set_bt_enabled" => {
+                        let r = ipc
+                            .send_command(IpcCommand::SetBluetoothEnabled {
+                                enabled: req.enabled.unwrap_or(true),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                        }
+                        r
+                    }
+                    "set_usb_enabled" => {
+                        let r = ipc
+                            .send_command(IpcCommand::SetUsbEnabled {
+                                enabled: req.enabled.unwrap_or(true),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                        }
+                        r
+                    }
+                    "set_usb_priority" => {
+                        let r = ipc
+                            .send_command(IpcCommand::SetUsbPriority {
+                                enabled: req.enabled.unwrap_or(true),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                        }
+                        r
+                    }
                     "revoke" => match req.device_id.filter(|id| !id.trim().is_empty()) {
                         Some(device_id) => {
                             let r = ipc

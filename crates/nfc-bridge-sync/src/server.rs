@@ -24,6 +24,10 @@ pub struct TrustedDeviceInfo {
     pub created_unix: u64,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "command", content = "params")]
 pub enum IpcCommand {
@@ -34,6 +38,10 @@ pub enum IpcCommand {
     SetRelayUrl { url: Option<String> },
     SetPaused { paused: bool },
     SetUsbPriority { enabled: bool },
+    SetUsbEnabled { enabled: bool },
+    SetTcpEnabled { enabled: bool },
+    SetWifiDirectEnabled { enabled: bool },
+    SetBluetoothEnabled { enabled: bool },
     DisconnectDevice,
     RevokeTrustedDevice { device_id: String },
 }
@@ -73,6 +81,18 @@ pub enum IpcEvent {
         wfd_ssid: Option<String>,
         wfd_passphrase: Option<String>,
         wfd_ip: Option<String>,
+        #[serde(default = "default_true")]
+        tcp_enabled: bool,
+        #[serde(default)]
+        wfd_enabled: bool,
+        #[serde(default = "default_true")]
+        bt_enabled: bool,
+        #[serde(default = "default_true")]
+        usb_enabled: bool,
+        #[serde(default = "default_true")]
+        usb_auto_connect: bool,
+        #[serde(default)]
+        usb_connected: bool,
         #[serde(default)]
         driver_version: Option<String>,
         #[serde(default)]
@@ -130,6 +150,12 @@ pub struct TransportSnapshotData {
     pub wfd_ssid: Option<String>,
     pub wfd_passphrase: Option<String>,
     pub wfd_ip: Option<String>,
+    pub tcp_enabled: bool,
+    pub wfd_enabled: bool,
+    pub bt_enabled: bool,
+    pub usb_enabled: bool,
+    pub usb_auto_connect: bool,
+    pub usb_connected: bool,
     pub driver_version: Option<String>,
     pub driver_build_id: Option<String>,
     pub trusted_devices: Vec<TrustedDeviceInfo>,
@@ -151,6 +177,12 @@ impl Default for TransportSnapshotData {
             wfd_ssid: None,
             wfd_passphrase: None,
             wfd_ip: None,
+            tcp_enabled: true,
+            wfd_enabled: false,
+            bt_enabled: true,
+            usb_enabled: true,
+            usb_auto_connect: true,
+            usb_connected: false,
             driver_version: None,
             driver_build_id: None,
             trusted_devices: Vec::new(),
@@ -422,6 +454,12 @@ impl DriverIpcClient {
                 wfd_ssid,
                 wfd_passphrase,
                 wfd_ip,
+                tcp_enabled,
+                wfd_enabled,
+                bt_enabled,
+                usb_enabled,
+                usb_auto_connect,
+                usb_connected,
                 driver_version,
                 driver_build_id,
                 trusted_devices,
@@ -441,6 +479,12 @@ impl DriverIpcClient {
                     wfd_ssid,
                     wfd_passphrase,
                     wfd_ip,
+                    tcp_enabled,
+                    wfd_enabled,
+                    bt_enabled,
+                    usb_enabled,
+                    usb_auto_connect,
+                    usb_connected,
                     driver_version,
                     driver_build_id,
                     trusted_devices,
