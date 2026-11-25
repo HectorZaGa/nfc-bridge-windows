@@ -228,10 +228,10 @@ impl DesktopUpdater {
             }
         }
 
-        // 2. Verificar driver (HectorZaGa/nfc-bridge-driver)
+        // 2. Verificar driver (HectorZaGa/nfc-bridge-driver) — el driver siempre usa instalador
         let local_drv = cur.driver_version.clone().unwrap_or_else(|| "0.0.0".to_string());
         match self
-            .fetch_matching_release(DRIVER_REPO, "nfc-bridge-driver-", cur.is_portable)
+            .fetch_matching_release(DRIVER_REPO, "nfc-bridge-driver-", false)
             .await
         {
             Ok(Some(matched)) => {
@@ -347,16 +347,21 @@ impl DesktopUpdater {
             .to_path_buf();
 
         if is_portable {
-            // En modo portable se descarga en la misma carpeta donde corre el programa y solicita reinicio
+            // En modo portable o ejecutable directo, se descarga en la misma carpeta donde corre el programa
             let archive_path = exe_dir.join(&release.asset_name);
             if let Err(e) = self.download_to_path(&release.download_url, &archive_path).await {
                 let mut st = self.state.write().await;
                 st.app_status = "error".to_string();
-                st.app_message = format!("Error descargando portable: {}", e);
+                st.app_message = format!("Error descargando actualización: {}", e);
                 return Err(e);
             }
 
-            let install_res = apply_portable_archive_update(&exe_path, &archive_path);
+            let lower = release.asset_name.to_ascii_lowercase();
+            let install_res = if lower.ends_with(".zip") {
+                apply_portable_archive_update(&exe_path, &archive_path)
+            } else {
+                Ok(archive_path)
+            };
             match install_res {
                 Ok(target_launch_exe) => {
                     info!(
