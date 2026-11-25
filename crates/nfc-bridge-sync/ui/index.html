@@ -197,13 +197,13 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <!-- 1. Cable USB -->
+            <!-- 1. USB -->
             <button type="button" data-panel="usb" class="conn-method-btn w-full bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
               <div class="flex items-center gap-gutter-sm min-w-0 flex-1">
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">usb</span>
                 <div class="flex flex-col min-w-0 flex-1">
-                  <span class="font-label text-label-lg text-dark-on-surface">Cable USB</span>
-                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Conexión automática AOA de prioridad 1</p>
+                  <span class="font-label text-label-lg text-dark-on-surface">USB</span>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Conexión por cable de máxima prioridad (&lt;1 ms)</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-electric-blue text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -215,7 +215,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">wifi</span>
                 <div class="flex flex-col min-w-0 flex-1">
                   <span class="font-label text-label-lg text-dark-on-surface">Red Local (TCP)</span>
-                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">IP, puerto o QR local en tu red</p>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Conexión cifrada por IP en tu misma red Wi-Fi</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -227,19 +227,19 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">bluetooth</span>
                 <div class="flex flex-col min-w-0 flex-1">
                   <span class="font-label text-label-lg text-dark-on-surface">Bluetooth</span>
-                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Emparejar sin Wi-Fi ni router</p>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Empareja sin usar Wi-Fi ni router</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
             </button>
 
-            <!-- 4. Link único (Cloud Relay sin estar en la misma red) -->
+            <!-- 4. Enlace remoto (Cloud Relay sin estar en la misma red) -->
             <button type="button" data-panel="relay" class="conn-method-btn w-full bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
               <div class="flex items-center gap-gutter-sm min-w-0 flex-1">
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">link</span>
                 <div class="flex flex-col min-w-0 flex-1">
-                  <span class="font-label text-label-lg text-dark-on-surface">Link único</span>
-                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Conexión remota en la nube sin Wi-Fi local</p>
+                  <span class="font-label text-label-lg text-dark-on-surface">Enlace remoto</span>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Conecta por Internet mediante enlace temporal</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -251,7 +251,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">wifi_tethering</span>
                 <div class="flex flex-col min-w-0 flex-1">
                   <span class="font-label text-label-lg text-dark-on-surface">Wi-Fi Direct</span>
-                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Red directa SSID y clave sin router</p>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Red inalámbrica directa entre PC y móvil</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -261,13 +261,13 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
       </div>
 
-      <!-- Columna derecha: Panel único de vinculación (Link único / Bluetooth / TCP / Wi-Fi Direct / USB + Vista QR temporal) -->
+      <!-- Columna derecha: Panel único de vinculación -->
       <aside class="bg-dark-surface-card border border-dark-outline rounded-md p-gutter-lg flex flex-col justify-between gap-gutter-md" aria-label="Panel de vinculación">
 
-        <!-- CASO 1: LINK ÚNICO (Relay Cloud fuera de la misma red Wi-Fi) -->
+        <!-- CASO 1: ENLACE REMOTO (Relay Cloud fuera de la misma red Wi-Fi) -->
         <div id="panel-relay" class="conn-detail-panel hidden flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
-            <span class="font-headline text-title-md text-dark-on-surface">Link único (Nube)</span>
+            <span class="font-headline text-title-md text-dark-on-surface">Enlace remoto (Nube)</span>
             <span id="relay-status-pill" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-muted">Sin Relay</span>
           </div>
 
@@ -285,14 +285,25 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               <span id="relay-channel-label" class="font-mono text-mono-sm text-dark-on-surface truncate">nb-...</span>
             </div>
 
+            <div id="relay-live-link-box" class="hidden bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-2 flex flex-col gap-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-label text-[11px] text-dark-on-surface-muted">Enlace temporal activo</span>
+                <span id="relay-live-countdown" class="font-mono text-[11px] text-electric-blue tabular-nums">5:00</span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span id="relay-live-link-text" class="font-mono text-[11px] text-dark-on-surface truncate">https://...</span>
+                <button id="btn-copy-panel-link" type="button" class="text-electric-blue hover:underline font-label text-[11px] shrink-0">Copiar</button>
+              </div>
+            </div>
+
             <p class="font-body text-[11px] text-dark-on-surface-muted">
-              Permite conectar tu celular desde datos móviles (4G/5G) u otra red sin instalar apps de terceros.
+              Conecta desde datos móviles (4G/5G) u otra red mediante un enlace efímero que se renueva cada 5 minutos.
             </p>
           </div>
 
           <button type="button" data-qr-method="relay" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
             <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
-            <span>Generar QR y Link único</span>
+            <span>Generar QR y enlace</span>
           </button>
         </div>
 
@@ -348,7 +359,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             </div>
 
             <p class="font-body text-[11px] text-dark-on-surface-muted">
-              Ambos dispositivos deben estar en la misma red Wi-Fi o LAN. Pulsa Generar QR para emparejar al instante.
+              Ambos dispositivos deben estar en la misma red Wi-Fi. La conexión local viaja cifrada con TLS.
             </p>
           </div>
 
@@ -398,10 +409,10 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           </button>
         </div>
 
-        <!-- CASO 5: CABLE USB -->
+        <!-- CASO 5: USB -->
         <div id="panel-usb" class="conn-detail-panel flex flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
-            <span class="font-headline text-title-md text-dark-on-surface">Cable USB</span>
+            <span class="font-headline text-title-md text-dark-on-surface">USB</span>
             <span class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-muted">Prioridad 1</span>
           </div>
 
@@ -442,11 +453,11 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           <div class="w-full flex flex-col gap-1">
             <div class="w-full bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-1.5 flex items-center justify-between gap-gutter-sm">
               <span id="qr-token-label" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">PAIR-...</span>
-              <span id="qr-countdown-label" class="font-mono text-[11px] text-electric-blue tabular-nums">90s</span>
+              <span id="qr-countdown-label" class="font-mono text-[11px] text-electric-blue tabular-nums">5:00</span>
             </div>
             <button id="btn-copy-share-link" type="button" class="hidden w-full h-8 rounded-sm bg-dark-surface border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-surface-elevated inline-flex items-center justify-center gap-1">
               <span class="material-symbols-outlined text-body-md" aria-hidden="true">content_copy</span>
-              <span>Copiar Link único</span>
+              <span>Copiar enlace temporal</span>
             </button>
           </div>
 
@@ -571,11 +582,17 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       }
 
       const qrMethodLabels = {
-        relay: 'Link único',
+        relay: 'Enlace remoto',
         bluetooth: 'Bluetooth',
         tcp: 'TCP LAN',
         wifi_direct: 'Wi-Fi Direct'
       };
+
+      function formatCountdown(secs) {
+        const m = Math.floor(secs / 60);
+        const s = String(secs % 60).padStart(2, '0');
+        return m + ':' + s;
+      }
 
       function requestAndShowQr(method) {
         currentQrMethod = method;
@@ -610,18 +627,22 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             }
 
             stopQrCountdown();
-            qrSecondsLeft = res.expires_in_secs || 90;
+            qrSecondsLeft = res.expires_in_secs || 300;
             const cdEl = document.getElementById('qr-countdown-label');
-            cdEl.textContent = qrSecondsLeft + 's';
+            cdEl.textContent = formatCountdown(qrSecondsLeft);
+            cdEl.className = 'font-mono text-[11px] text-electric-blue tabular-nums';
             qrCountdownTimer = setInterval(function () {
               qrSecondsLeft -= 1;
               if (qrSecondsLeft <= 0) {
                 stopQrCountdown();
-                cdEl.textContent = 'Expirado';
-                cdEl.className = 'font-mono text-[11px] text-red-disconnect tabular-nums';
+                cdEl.textContent = 'Renovando...';
+                cdEl.className = 'font-mono text-[11px] text-amber-pause tabular-nums';
+                if (currentQrMethod) {
+                  requestAndShowQr(currentQrMethod);
+                }
               } else {
-                cdEl.textContent = qrSecondsLeft + 's';
-                cdEl.className = qrSecondsLeft <= 15
+                cdEl.textContent = formatCountdown(qrSecondsLeft);
+                cdEl.className = qrSecondsLeft <= 30
                   ? 'font-mono text-[11px] text-amber-pause tabular-nums'
                   : 'font-mono text-[11px] text-electric-blue tabular-nums';
               }
@@ -651,10 +672,60 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         if (navigator.clipboard && currentShareLink) {
           navigator.clipboard.writeText(currentShareLink).catch(function () {});
           const span = this.querySelector('span:last-child');
-          span.textContent = 'Link copiado';
-          setTimeout(function () { span.textContent = 'Copiar Link único'; }, 1400);
+          span.textContent = 'Enlace copiado';
+          setTimeout(function () { span.textContent = 'Copiar enlace temporal'; }, 1400);
         }
       });
+
+      document.getElementById('btn-copy-panel-link').addEventListener('click', function () {
+        if (navigator.clipboard && liveRelayShareLink) {
+          navigator.clipboard.writeText(liveRelayShareLink).catch(function () {});
+          const btn = this;
+          btn.textContent = 'Copiado';
+          setTimeout(function () { btn.textContent = 'Copiar'; }, 1400);
+        }
+      });
+
+      let liveRelayShareLink = null;
+      let liveRelaySecsLeft = 0;
+      let liveRelayTimer = null;
+      let liveRelayInFlight = false;
+
+      function refreshLiveRelayLink() {
+        if (liveRelayInFlight) return;
+        liveRelayInFlight = true;
+        fetch('/api/qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: 'relay' })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (!res || !res.ok || !res.share_link) return;
+            liveRelayShareLink = res.share_link;
+            liveRelaySecsLeft = res.expires_in_secs || 300;
+            const box = document.getElementById('relay-live-link-box');
+            const textEl = document.getElementById('relay-live-link-text');
+            const cdEl = document.getElementById('relay-live-countdown');
+            box.classList.remove('hidden');
+            textEl.textContent = liveRelayShareLink;
+            cdEl.textContent = formatCountdown(liveRelaySecsLeft);
+            if (liveRelayTimer) clearInterval(liveRelayTimer);
+            liveRelayTimer = setInterval(function () {
+              liveRelaySecsLeft -= 1;
+              if (liveRelaySecsLeft <= 0) {
+                clearInterval(liveRelayTimer);
+                liveRelayTimer = null;
+                cdEl.textContent = 'Renovando...';
+                refreshLiveRelayLink();
+              } else {
+                cdEl.textContent = formatCountdown(liveRelaySecsLeft);
+              }
+            }, 1000);
+          })
+          .catch(function () {})
+          .finally(function () { liveRelayInFlight = false; });
+      }
 
       const relayInput = document.getElementById('relay-url-input');
       document.getElementById('btn-save-relay').addEventListener('click', function () {
@@ -800,6 +871,9 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
             if (document.activeElement !== relayInput && snap.relay_url && !relayInput.value) {
               relayInput.value = snap.relay_url;
+            }
+            if (s.driver_online && snap.relay_url && !liveRelayShareLink) {
+              refreshLiveRelayLink();
             }
             document.getElementById('relay-channel-label').textContent = snap.relay_channel || 'nb-...';
             const relayPill = document.getElementById('relay-status-pill');
