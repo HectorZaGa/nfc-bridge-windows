@@ -1,6 +1,6 @@
 [package]
 name = "nfc-bridge-tools"
-version = "0.1.7"
+version = "0.1.8"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -11,6 +11,7 @@ portable = []
 
 [dependencies]
 core-proto = { workspace = true }
+nfc-bridge-sync = { path = "../nfc-bridge-sync" }
 tokio = { workspace = true }
 bytes = { workspace = true }
 serde = { workspace = true }
