@@ -170,11 +170,11 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
             <!-- Botones Pausar y Desconectar en la misma tarjeta -->
             <div class="flex items-center gap-1.5 shrink-0">
-              <button id="btn-pc-pause" type="button" aria-pressed="false" title="Pausar lector NFC" class="h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors duration-state-change ease-state-change hover:bg-dark-outline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue disabled:opacity-40 disabled:pointer-events-none">
+              <button id="btn-pc-pause" type="button" disabled aria-pressed="false" title="Pausar lector NFC" class="h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors duration-state-change ease-state-change enabled:hover:bg-dark-outline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue disabled:opacity-35 disabled:pointer-events-none">
                 <span id="btn-pc-pause-icon" class="material-symbols-outlined text-title-md text-dark-on-surface-muted" aria-hidden="true">pause</span>
                 <span id="btn-pc-pause-label">Pausar</span>
               </button>
-              <button id="btn-pc-disconnect" type="button" title="Desconectar sesión (conserva el perfil)" aria-label="Desconectar dispositivo" class="w-8 h-8 rounded-sm bg-transparent border border-red-disconnect-border text-red-disconnect inline-flex items-center justify-center transition-colors duration-state-change ease-state-change hover:bg-red-disconnect-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-disconnect disabled:opacity-35 disabled:pointer-events-none">
+              <button id="btn-pc-disconnect" type="button" disabled title="Desconectar sesión (conserva el perfil)" aria-label="Desconectar dispositivo" class="w-8 h-8 rounded-sm bg-transparent border border-red-disconnect-border text-red-disconnect inline-flex items-center justify-center transition-colors duration-state-change ease-state-change enabled:hover:bg-red-disconnect-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-disconnect disabled:opacity-35 disabled:pointer-events-none">
                 <span class="material-symbols-outlined text-title-md" aria-hidden="true">link_off</span>
               </button>
             </div>
@@ -1062,9 +1062,10 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               setDropdownOpen(false);
             }
 
-            isPaused = !!s.paused;
+            isPaused = !!s.connected && !!s.paused;
             btnPause.disabled = !s.connected;
             btnDisconnect.disabled = !s.connected;
+            btnPause.setAttribute('aria-pressed', isPaused ? 'true' : 'false');
 
             if (s.connected) {
               activeName.textContent = s.device_name || 'Móvil Android';
@@ -1104,12 +1105,12 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             }
 
             if (isPaused) {
-              btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-amber-pause-soft border border-amber-pause text-on-amber-pause-soft font-label text-label-md inline-flex items-center gap-1 transition-colors';
+              btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-amber-pause-soft border border-amber-pause text-on-amber-pause-soft font-label text-label-md inline-flex items-center gap-1 transition-colors duration-state-change ease-state-change focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue disabled:opacity-35 disabled:pointer-events-none';
               btnPauseIcon.textContent = 'play_arrow';
               btnPauseIcon.className = 'material-symbols-outlined text-title-md text-amber-pause';
               btnPauseLabel.textContent = 'Reanudar';
             } else {
-              btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors hover:bg-dark-outline';
+              btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors duration-state-change ease-state-change enabled:hover:bg-dark-outline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue disabled:opacity-35 disabled:pointer-events-none';
               btnPauseIcon.textContent = 'pause';
               btnPauseIcon.className = 'material-symbols-outlined text-title-md text-dark-on-surface-muted';
               btnPauseLabel.textContent = 'Pausar';
