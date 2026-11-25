@@ -25,6 +25,8 @@ pub struct TrustedDeviceInfo {
     #[serde(default)]
     pub mobile_id: Option<String>,
     #[serde(default)]
+    pub device_os: Option<String>,
+    #[serde(default)]
     pub transport: Option<String>,
     #[serde(default)]
     pub endpoint: Option<String>,
@@ -67,6 +69,8 @@ pub enum IpcEvent {
         transport: Option<String>,
         #[serde(default)]
         mobile_id: Option<String>,
+        #[serde(default)]
+        device_os: Option<String>,
         #[serde(default)]
         active_device_id: Option<String>,
     },
@@ -213,11 +217,13 @@ pub struct DesktopLiveState {
     pub endpoint: Option<String>,
     pub transport: Option<String>,
     pub mobile_id: Option<String>,
+    pub device_os: Option<String>,
     pub active_device_id: Option<String>,
     pub last_device_name: Option<String>,
     pub last_endpoint: Option<String>,
     pub last_transport: Option<String>,
     pub last_mobile_id: Option<String>,
+    pub last_device_os: Option<String>,
     pub latency_ms: u64,
     pub paused: bool,
     pub tag_present: bool,
@@ -236,11 +242,13 @@ impl Default for DesktopLiveState {
             endpoint: None,
             transport: None,
             mobile_id: None,
+            device_os: None,
             active_device_id: None,
             last_device_name: None,
             last_endpoint: None,
             last_transport: None,
             last_mobile_id: None,
+            last_device_os: None,
             latency_ms: 0,
             paused: false,
             tag_present: false,
@@ -408,6 +416,7 @@ impl DriverIpcClient {
                 tag_uid,
                 transport,
                 mobile_id,
+                device_os,
                 active_device_id,
             } => {
                 {
@@ -416,6 +425,7 @@ impl DriverIpcClient {
                     st.device_name = device_name.clone();
                     st.transport = transport.clone();
                     st.mobile_id = mobile_id.clone();
+                    st.device_os = device_os.clone();
                     st.active_device_id = active_device_id;
                     if let Some(ref name) = device_name {
                         st.last_device_name = Some(name.clone());
@@ -425,6 +435,9 @@ impl DriverIpcClient {
                     }
                     if let Some(ref mid) = mobile_id {
                         st.last_mobile_id = Some(mid.clone());
+                    }
+                    if let Some(ref os) = device_os {
+                        st.last_device_os = Some(os.clone());
                     }
                     st.latency_ms = latency_ms;
                     st.paused = paused;
@@ -563,11 +576,12 @@ impl DriverIpcClient {
                     st.connected = false;
                     st.device_name = None;
                     st.endpoint = None;
+                    st.device_os = None;
                     st.paused = false;
                     st.tag_present = false;
                     st.tag_uid = None;
                 }
-                info!("[Driver] Dispositivo Android desconectado.");
+                info!("[Driver] Dispositivo móvil desconectado.");
             }
             IpcEvent::LatencyUpdated { latency_ms } => {
                 let mut st = self.state.write().await;
