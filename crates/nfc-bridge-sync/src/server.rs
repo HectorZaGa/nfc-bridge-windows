@@ -17,6 +17,13 @@ use tracing::{info, warn};
 
 use crate::driver_manager::DRIVER_NAMED_PIPE;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustedDeviceInfo {
+    pub device_id: String,
+    pub device_name: String,
+    pub created_unix: u64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "command", content = "params")]
 pub enum IpcCommand {
@@ -28,6 +35,7 @@ pub enum IpcCommand {
     SetPaused { paused: bool },
     SetUsbPriority { enabled: bool },
     DisconnectDevice,
+    RevokeTrustedDevice { device_id: String },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -69,6 +77,8 @@ pub enum IpcEvent {
         driver_version: Option<String>,
         #[serde(default)]
         driver_build_id: Option<String>,
+        #[serde(default)]
+        trusted_devices: Vec<TrustedDeviceInfo>,
     },
     PairingTokenIssued {
         method: String,
@@ -122,6 +132,7 @@ pub struct TransportSnapshotData {
     pub wfd_ip: Option<String>,
     pub driver_version: Option<String>,
     pub driver_build_id: Option<String>,
+    pub trusted_devices: Vec<TrustedDeviceInfo>,
 }
 
 impl Default for TransportSnapshotData {
@@ -142,6 +153,7 @@ impl Default for TransportSnapshotData {
             wfd_ip: None,
             driver_version: None,
             driver_build_id: None,
+            trusted_devices: Vec::new(),
         }
     }
 }
@@ -154,6 +166,8 @@ pub struct DesktopLiveState {
     pub connected: bool,
     pub device_name: Option<String>,
     pub endpoint: Option<String>,
+    pub last_device_name: Option<String>,
+    pub last_endpoint: Option<String>,
     pub latency_ms: u64,
     pub paused: bool,
     pub tag_present: bool,
@@ -170,6 +184,8 @@ impl Default for DesktopLiveState {
             connected: false,
             device_name: None,
             endpoint: None,
+            last_device_name: None,
+            last_endpoint: None,
             latency_ms: 0,
             paused: false,
             tag_present: false,
@@ -340,6 +356,9 @@ impl DriverIpcClient {
                     let mut st = self.state.write().await;
                     st.connected = connected;
                     st.device_name = device_name.clone();
+                    if let Some(ref name) = device_name {
+                        st.last_device_name = Some(name.clone());
+                    }
                     st.latency_ms = latency_ms;
                     st.paused = paused;
                     st.tag_present = tag_present;
@@ -405,6 +424,7 @@ impl DriverIpcClient {
                 wfd_ip,
                 driver_version,
                 driver_build_id,
+                trusted_devices,
             } => {
                 let mut st = self.state.write().await;
                 st.snapshot = TransportSnapshotData {
@@ -423,6 +443,7 @@ impl DriverIpcClient {
                     wfd_ip,
                     driver_version,
                     driver_build_id,
+                    trusted_devices,
                 };
             }
             IpcEvent::PairingTokenIssued {
@@ -452,6 +473,8 @@ impl DriverIpcClient {
                     st.connected = true;
                     st.device_name = Some(device_name.clone());
                     st.endpoint = Some(endpoint.clone());
+                    st.last_device_name = Some(device_name.clone());
+                    st.last_endpoint = Some(endpoint.clone());
                 }
                 info!("[Driver] Dispositivo Android conectado: '{}' vía {}", device_name, endpoint);
             }
@@ -461,6 +484,7 @@ impl DriverIpcClient {
                     st.connected = false;
                     st.device_name = None;
                     st.endpoint = None;
+                    st.paused = false;
                     st.tag_present = false;
                     st.tag_uid = None;
                 }

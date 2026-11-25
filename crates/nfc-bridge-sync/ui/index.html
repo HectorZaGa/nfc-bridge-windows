@@ -112,7 +112,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 <body class="text-dark-on-surface antialiased selection:bg-electric-blue-soft selection:text-on-electric-blue-soft inline-block">
 
   <!-- Ventana compacta de escritorio NFC Bridge Lite -->
-  <div class="w-[760px] bg-dark-surface border border-dark-outline rounded-md shadow-2xl overflow-visible flex flex-col">
+  <div class="w-[860px] max-w-[96vw] bg-dark-surface border border-dark-outline rounded-md shadow-2xl overflow-visible flex flex-col">
 
     <!-- Barra de título de ventana PC -->
     <header class="h-12 px-gutter-lg bg-dark-surface-card border-b border-dark-outline rounded-t-md flex items-center justify-between gap-gutter-md select-none">
@@ -139,88 +139,57 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
     </header>
 
     <!-- Contenido principal: 2 columnas -->
-    <main class="grid grid-cols-[1.24fr_0.96fr] gap-gutter-lg p-gutter-lg items-stretch">
+    <main class="grid grid-cols-[1.28fr_0.92fr] gap-gutter-lg p-gutter-lg items-stretch">
 
       <!-- Columna izquierda: Tarjeta de dispositivo móvil (con flecha desplegable + Pausar + Desconectar) + 5 opciones de conexión -->
       <div class="flex flex-col gap-gutter-md min-w-0">
 
         <!-- Sección 1: Dispositivo móvil -->
         <section class="flex flex-col gap-gutter-xs relative" aria-label="Dispositivo móvil">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-2">
             <h2 class="font-headline text-title-md text-dark-on-surface" data-design-text-token="title-md">Dispositivo móvil</h2>
-            <span id="device-count-badge" class="font-label text-label-md text-dark-on-surface-muted" data-design-text-token="label-md">1 conectado • 3 vinculados</span>
+            <span id="device-count-badge" class="font-label text-label-md text-dark-on-surface-muted" data-design-text-token="label-md">0 conectados</span>
           </div>
 
           <!-- Misma tarjeta unificada con selector desplegable + botones Pausar y Desconectar adentro -->
           <div id="active-device-card" class="bg-dark-surface-card border border-dark-outline rounded-md p-gutter-md flex items-center justify-between gap-gutter-sm">
             <!-- Área clickeable con flecha para abrir menú de dispositivos vinculados -->
-            <button id="btn-device-dropdown" type="button" aria-expanded="false" aria-haspopup="listbox" title="Cambiar dispositivo móvil" class="flex items-center gap-gutter-sm min-w-0 flex-1 text-left rounded-sm px-1.5 py-1 -mx-1.5 -my-1 transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
-              <div id="active-device-icon-wrap" class="w-10 h-10 rounded-sm bg-electric-blue-soft border border-electric-blue-border flex items-center justify-center shrink-0" aria-hidden="true">
-                <span id="active-device-icon" class="material-symbols-outlined text-electric-blue text-title-lg">smartphone</span>
+            <button id="btn-device-dropdown" type="button" aria-expanded="false" aria-haspopup="listbox" title="Ver dispositivos vinculados" class="flex items-center gap-gutter-sm min-w-0 flex-1 text-left rounded-sm px-1.5 py-1 -mx-1.5 -my-1 transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+              <div id="active-device-icon-wrap" class="w-10 h-10 rounded-sm bg-dark-surface-elevated border border-dark-outline flex items-center justify-center shrink-0" aria-hidden="true">
+                <span id="active-device-icon" class="material-symbols-outlined text-dark-on-surface-muted text-title-lg">phonelink_off</span>
               </div>
               <div class="flex flex-col gap-0.5 min-w-0 flex-1">
-                <div class="flex items-center gap-1.5">
-                  <span id="active-device-name" class="font-headline text-title-md text-dark-on-surface-card truncate" data-design-text-token="title-md">Pixel 8 Pro</span>
-                  <span id="active-device-led" class="w-2 h-2 rounded-full bg-led-green shrink-0" title="Conectado" aria-label="Conectado"></span>
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span id="active-device-name" class="font-headline text-title-md text-dark-on-surface-card truncate" data-design-text-token="title-md">Sin dispositivo</span>
+                  <span id="active-device-led" class="w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0" title="Desconectado" aria-label="Desconectado"></span>
                   <span id="device-dropdown-chevron" class="material-symbols-outlined text-title-md text-dark-on-surface-muted transition-transform duration-state-change shrink-0" aria-hidden="true">expand_more</span>
                 </div>
-                <span id="active-device-meta" class="font-label text-label-md text-dark-on-surface-muted tabular-nums truncate" data-design-text-token="label-md">Lector NFC activo • TCP 4 ms</span>
+                <span id="active-device-meta" class="font-label text-label-md text-dark-on-surface-muted tabular-nums truncate" data-design-text-token="label-md">Elige una opción y genera su QR</span>
               </div>
             </button>
 
             <!-- Botones Pausar y Desconectar en la misma tarjeta -->
             <div class="flex items-center gap-1.5 shrink-0">
-              <button id="btn-pc-pause" type="button" aria-pressed="false" title="Pausar lector NFC" class="h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors duration-state-change ease-state-change hover:bg-dark-outline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+              <button id="btn-pc-pause" type="button" aria-pressed="false" title="Pausar lector NFC" class="h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors duration-state-change ease-state-change hover:bg-dark-outline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue disabled:opacity-40 disabled:pointer-events-none">
                 <span id="btn-pc-pause-icon" class="material-symbols-outlined text-title-md text-dark-on-surface-muted" aria-hidden="true">pause</span>
                 <span id="btn-pc-pause-label">Pausar</span>
               </button>
-              <button id="btn-pc-disconnect" type="button" title="Desconectar dispositivo" aria-label="Desconectar dispositivo" class="w-8 h-8 rounded-sm bg-transparent border border-red-disconnect-border text-red-disconnect inline-flex items-center justify-center transition-colors duration-state-change ease-state-change hover:bg-red-disconnect-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-disconnect">
+              <button id="btn-pc-disconnect" type="button" title="Desconectar sesión (conserva el perfil)" aria-label="Desconectar dispositivo" class="w-8 h-8 rounded-sm bg-transparent border border-red-disconnect-border text-red-disconnect inline-flex items-center justify-center transition-colors duration-state-change ease-state-change hover:bg-red-disconnect-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-disconnect disabled:opacity-35 disabled:pointer-events-none">
                 <span class="material-symbols-outlined text-title-md" aria-hidden="true">link_off</span>
               </button>
             </div>
           </div>
 
-          <!-- Menú desplegable de dispositivos vinculados -->
-          <div id="device-dropdown-menu" role="listbox" aria-label="Dispositivos vinculados" class="hidden absolute left-0 right-0 top-full mt-1 z-30 bg-dark-surface-card border border-dark-outline rounded-md p-1.5 shadow-2xl flex flex-col gap-0.5">
-            <button type="button" role="option" aria-selected="true" data-device-name="Pixel 8 Pro" data-device-meta="Lector NFC activo • TCP 4 ms" class="device-option w-full px-gutter-md py-2 rounded-sm bg-dark-surface-elevated flex items-center justify-between gap-gutter-sm text-left transition-colors hover:bg-dark-outline/60">
-              <div class="flex items-center gap-gutter-sm min-w-0">
-                <span class="w-2 h-2 rounded-full bg-led-green shrink-0"></span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Pixel 8 Pro</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Conectado ahora • TCP 4 ms</span>
-                </div>
-              </div>
-              <span class="material-symbols-outlined text-title-md text-electric-blue check-icon" aria-hidden="true">check</span>
-            </button>
-
-            <button type="button" role="option" aria-selected="false" data-device-name="Galaxy S24" data-device-meta="Lector NFC activo • TCP 6 ms" class="device-option w-full px-gutter-md py-2 rounded-sm flex items-center justify-between gap-gutter-sm text-left transition-colors hover:bg-dark-surface-elevated">
-              <div class="flex items-center gap-gutter-sm min-w-0">
-                <span class="w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0"></span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Galaxy S24</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Disponible en red local • Cambiar</span>
-                </div>
-              </div>
-              <span class="material-symbols-outlined text-title-md text-electric-blue check-icon hidden" aria-hidden="true">check</span>
-            </button>
-
-            <button type="button" role="option" aria-selected="false" data-device-name="Xiaomi 14" data-device-meta="Lector NFC activo • Bluetooth" class="device-option w-full px-gutter-md py-2 rounded-sm flex items-center justify-between gap-gutter-sm text-left transition-colors hover:bg-dark-surface-elevated">
-              <div class="flex items-center gap-gutter-sm min-w-0">
-                <span class="w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0"></span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Xiaomi 14</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Emparejado por Bluetooth • Cambiar</span>
-                </div>
-              </div>
-              <span class="material-symbols-outlined text-title-md text-electric-blue check-icon hidden" aria-hidden="true">check</span>
-            </button>
+          <!-- Menú desplegable de dispositivos vinculados (dinámico desde Sync/Driver) -->
+          <div id="device-dropdown-menu" role="listbox" aria-label="Dispositivos vinculados" class="hidden absolute left-0 right-0 top-full mt-1 z-30 bg-dark-surface-card border border-dark-outline rounded-md p-1.5 shadow-2xl flex flex-col gap-1 max-h-60 overflow-y-auto">
+            <div class="px-gutter-md py-2 text-center font-label text-label-md text-dark-on-surface-muted">Sin dispositivos vinculados todavía</div>
           </div>
         </section>
 
         <!-- Separador -->
         <div class="h-px bg-dark-outline" role="separator"></div>
 
-        <!-- Sección 2: Todas las opciones de conexión (actualizan el panel derecho) -->
+        <!-- Sección 2: Todas las opciones de conexión (mismo orden que Android Lite: USB, TCP, Bluetooth, Link único, Wi-Fi Direct) -->
         <section class="flex flex-col gap-gutter-xs flex-1" aria-label="Opciones de conexión">
           <div class="flex items-center justify-between">
             <h2 class="font-headline text-title-md text-dark-on-surface" data-design-text-token="title-md">Opciones de conexión</h2>
@@ -228,61 +197,61 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <!-- 1. Link único (Cloud Relay sin estar en la misma red) -->
-            <button type="button" data-panel="relay" class="conn-method-btn bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
-              <div class="flex items-center gap-gutter-sm min-w-0">
-                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">link</span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Link único</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Conexión remota en la nube sin Wi-Fi local</span>
+            <!-- 1. Cable USB -->
+            <button type="button" data-panel="usb" class="conn-method-btn w-full bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+              <div class="flex items-center gap-gutter-sm min-w-0 flex-1">
+                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">usb</span>
+                <div class="flex flex-col min-w-0 flex-1">
+                  <span class="font-label text-label-lg text-dark-on-surface">Cable USB</span>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Conexión automática AOA de prioridad 1</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-electric-blue text-title-md shrink-0" aria-hidden="true">chevron_right</span>
             </button>
 
-            <!-- 2. Bluetooth -->
-            <button type="button" data-panel="bluetooth" class="conn-method-btn bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
-              <div class="flex items-center gap-gutter-sm min-w-0">
-                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">bluetooth</span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Bluetooth</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Emparejar sin Wi-Fi ni router</span>
-                </div>
-              </div>
-              <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
-            </button>
-
-            <!-- 3. Red Local (TCP) -->
-            <button type="button" data-panel="tcp" class="conn-method-btn bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
-              <div class="flex items-center gap-gutter-sm min-w-0">
+            <!-- 2. Red Local (TCP) -->
+            <button type="button" data-panel="tcp" class="conn-method-btn w-full bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+              <div class="flex items-center gap-gutter-sm min-w-0 flex-1">
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">wifi</span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Red Local (TCP)</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">IP, puerto o QR local en tu red</span>
+                <div class="flex flex-col min-w-0 flex-1">
+                  <span class="font-label text-label-lg text-dark-on-surface">Red Local (TCP)</span>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">IP, puerto o QR local en tu red</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
             </button>
 
-            <!-- 4. Wi-Fi Direct -->
-            <button type="button" data-panel="wifidirect" class="conn-method-btn bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
-              <div class="flex items-center gap-gutter-sm min-w-0">
+            <!-- 3. Bluetooth -->
+            <button type="button" data-panel="bluetooth" class="conn-method-btn w-full bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+              <div class="flex items-center gap-gutter-sm min-w-0 flex-1">
+                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">bluetooth</span>
+                <div class="flex flex-col min-w-0 flex-1">
+                  <span class="font-label text-label-lg text-dark-on-surface">Bluetooth</span>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Emparejar sin Wi-Fi ni router</p>
+                </div>
+              </div>
+              <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
+            </button>
+
+            <!-- 4. Link único (Cloud Relay sin estar en la misma red) -->
+            <button type="button" data-panel="relay" class="conn-method-btn w-full bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+              <div class="flex items-center gap-gutter-sm min-w-0 flex-1">
+                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">link</span>
+                <div class="flex flex-col min-w-0 flex-1">
+                  <span class="font-label text-label-lg text-dark-on-surface">Link único</span>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Conexión remota en la nube sin Wi-Fi local</p>
+                </div>
+              </div>
+              <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
+            </button>
+
+            <!-- 5. Wi-Fi Direct -->
+            <button type="button" data-panel="wifidirect" class="conn-method-btn w-full bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+              <div class="flex items-center gap-gutter-sm min-w-0 flex-1">
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">wifi_tethering</span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Wi-Fi Direct</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Red directa SSID y clave sin router</span>
-                </div>
-              </div>
-              <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
-            </button>
-
-            <!-- 5. Cable USB -->
-            <button type="button" data-panel="usb" class="conn-method-btn bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
-              <div class="flex items-center gap-gutter-sm min-w-0">
-                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">usb</span>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Cable USB</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Conexión automática AOA de prioridad 1</span>
+                <div class="flex flex-col min-w-0 flex-1">
+                  <span class="font-label text-label-lg text-dark-on-surface">Wi-Fi Direct</span>
+                  <p class="font-label text-[11px] leading-snug text-dark-on-surface-muted m-0">Red directa SSID y clave sin router</p>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -296,7 +265,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       <aside class="bg-dark-surface-card border border-dark-outline rounded-md p-gutter-lg flex flex-col justify-between gap-gutter-md" aria-label="Panel de vinculación">
 
         <!-- CASO 1: LINK ÚNICO (Relay Cloud fuera de la misma red Wi-Fi) -->
-        <div id="panel-relay" class="conn-detail-panel flex flex-col justify-between gap-gutter-md h-full">
+        <div id="panel-relay" class="conn-detail-panel hidden flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
             <span class="font-headline text-title-md text-dark-on-surface">Link único (Nube)</span>
             <span id="relay-status-pill" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-muted">Sin Relay</span>
@@ -306,8 +275,8 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             <div class="flex flex-col gap-1">
               <label for="relay-url-input" class="font-label text-[11px] text-dark-on-surface-muted">URL de tu Cloud Relay (Worker)</label>
               <div class="flex items-center gap-1.5">
-                <input id="relay-url-input" type="url" placeholder="https://nfc-bridge-relay.tu-cuenta.workers.dev" class="flex-1 h-9 bg-dark-surface border border-dark-outline rounded-sm px-gutter-md font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:ring-0">
-                <button id="btn-save-relay" type="button" class="h-9 px-gutter-md rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline transition-colors">Guardar</button>
+                <input id="relay-url-input" type="url" placeholder="https://nfc-bridge.hectorzaga96.workers.dev" class="flex-1 min-w-0 h-9 bg-dark-surface border border-dark-outline rounded-sm px-gutter-md font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:ring-0">
+                <button id="btn-save-relay" type="button" class="h-9 px-gutter-md rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline transition-colors shrink-0">Guardar</button>
               </div>
             </div>
 
@@ -430,7 +399,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         </div>
 
         <!-- CASO 5: CABLE USB -->
-        <div id="panel-usb" class="conn-detail-panel hidden flex-col justify-between gap-gutter-md h-full">
+        <div id="panel-usb" class="conn-detail-panel flex flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
             <span class="font-headline text-title-md text-dark-on-surface">Cable USB</span>
             <span class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-muted">Prioridad 1</span>
@@ -504,11 +473,34 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
       const methodButtons = document.querySelectorAll('.conn-method-btn');
       const detailPanels = document.querySelectorAll('.conn-detail-panel');
-      let currentPanelName = 'relay';
+      let currentPanelName = 'usb';
       let currentQrMethod = null;
       let currentShareLink = null;
       let qrCountdownTimer = null;
       let qrSecondsLeft = 0;
+
+      const btnDropdown = document.getElementById('btn-device-dropdown');
+      const dropdownMenu = document.getElementById('device-dropdown-menu');
+      const dropdownChevron = document.getElementById('device-dropdown-chevron');
+      let isDropdownOpen = false;
+
+      function setDropdownOpen(open) {
+        isDropdownOpen = open;
+        dropdownMenu.classList.toggle('hidden', !open);
+        btnDropdown.setAttribute('aria-expanded', open ? 'true' : 'false');
+        dropdownChevron.style.transform = open ? 'rotate(180deg)' : '';
+      }
+
+      btnDropdown.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setDropdownOpen(!isDropdownOpen);
+      });
+
+      document.addEventListener('click', function (e) {
+        if (isDropdownOpen && !dropdownMenu.contains(e.target) && !btnDropdown.contains(e.target)) {
+          setDropdownOpen(false);
+        }
+      });
 
       function showDetailPanel(panelKey) {
         detailPanels.forEach(function (p) {
@@ -524,13 +516,13 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
       methodButtons.forEach(function (btn) {
         btn.addEventListener('click', function () {
-          currentPanelName = btn.getAttribute('data-panel') || 'relay';
+          currentPanelName = btn.getAttribute('data-panel') || 'usb';
           stopQrCountdown();
           methodButtons.forEach(function (b) {
-            b.className = 'conn-method-btn bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
+            b.className = 'conn-method-btn w-full bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
             b.querySelector('span:last-child').className = 'material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0';
           });
-          btn.className = 'conn-method-btn bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
+          btn.className = 'conn-method-btn w-full bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
           btn.querySelector('span:last-child').className = 'material-symbols-outlined text-electric-blue text-title-md shrink-0';
           showDetailPanel(currentPanelName);
         });
@@ -543,7 +535,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: 'disconnect' })
-          }).catch(function () {});
+          }).then(refreshState).catch(function () {});
         });
       }
 
@@ -674,12 +666,128 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         }).then(refreshState).catch(function () {});
       });
 
+      function renderDeviceDropdown(s, trustedDevices) {
+        dropdownMenu.replaceChildren();
+        const items = [];
+        const activeNameVal = s.connected ? (s.device_name || 'Móvil Android') : null;
+        const lastKnownName = s.last_device_name || null;
+
+        trustedDevices.forEach(function (d) {
+          const isActiveMatch = s.connected && activeNameVal && d.device_name === activeNameVal;
+          items.push({
+            device_id: d.device_id,
+            name: d.device_name,
+            active: isActiveMatch,
+            paused: isActiveMatch && !!s.paused,
+            endpoint: isActiveMatch ? (s.endpoint || '') : '',
+            latency_ms: isActiveMatch ? (s.latency_ms || 1) : 0,
+            revocable: true
+          });
+        });
+
+        if (s.connected && activeNameVal && !items.some(function (i) { return i.active; })) {
+          items.unshift({
+            device_id: null,
+            name: activeNameVal,
+            active: true,
+            paused: !!s.paused,
+            endpoint: s.endpoint || '',
+            latency_ms: s.latency_ms || 1,
+            revocable: false
+          });
+        } else if (!s.connected && lastKnownName && !items.some(function (i) { return i.name === lastKnownName; })) {
+          items.unshift({
+            device_id: null,
+            name: lastKnownName,
+            active: false,
+            paused: false,
+            endpoint: s.last_endpoint || '',
+            latency_ms: 0,
+            revocable: false
+          });
+        }
+
+        if (items.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'px-gutter-md py-2 text-center font-label text-label-md text-dark-on-surface-muted';
+          empty.textContent = 'Sin dispositivos vinculados todavía';
+          dropdownMenu.appendChild(empty);
+          return items;
+        }
+
+        items.forEach(function (item) {
+          const row = document.createElement('div');
+          row.setAttribute('role', 'option');
+          row.setAttribute('aria-selected', item.active ? 'true' : 'false');
+          row.className = 'w-full px-gutter-md py-2 rounded-sm flex items-center justify-between gap-gutter-sm ' +
+            (item.active ? 'bg-dark-surface-elevated' : 'hover:bg-dark-surface-elevated/60');
+
+          const left = document.createElement('div');
+          left.className = 'flex items-center gap-gutter-sm min-w-0 flex-1';
+
+          const dot = document.createElement('span');
+          dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (item.active ? (item.paused ? 'bg-amber-pause' : 'bg-led-green') : 'bg-red-disconnect');
+          left.appendChild(dot);
+
+          const textCol = document.createElement('div');
+          textCol.className = 'flex flex-col min-w-0 flex-1';
+
+          const titleEl = document.createElement('span');
+          titleEl.className = 'font-label text-label-lg text-dark-on-surface truncate';
+          titleEl.textContent = item.name;
+          textCol.appendChild(titleEl);
+
+          const subEl = document.createElement('span');
+          subEl.className = 'font-label text-[11px] text-dark-on-surface-muted truncate';
+          if (item.active) {
+            subEl.textContent = item.paused
+              ? 'En pausa' + (item.endpoint ? ' • ' + item.endpoint : '')
+              : 'Conectado ahora' + (item.endpoint ? ' • ' + item.endpoint : '') + ' • ' + item.latency_ms + ' ms';
+          } else {
+            subEl.textContent = 'Desconectado • Perfil guardado' + (item.endpoint ? ' (' + item.endpoint + ')' : '');
+          }
+          textCol.appendChild(subEl);
+          left.appendChild(textCol);
+          row.appendChild(left);
+
+          const right = document.createElement('div');
+          right.className = 'flex items-center gap-1.5 shrink-0';
+          if (item.active) {
+            const checkIcon = document.createElement('span');
+            checkIcon.className = 'material-symbols-outlined text-title-md text-electric-blue';
+            checkIcon.textContent = 'check';
+            right.appendChild(checkIcon);
+          }
+          if (item.revocable && item.device_id) {
+            const revokeBtn = document.createElement('button');
+            revokeBtn.type = 'button';
+            revokeBtn.title = 'Olvidar y revocar dispositivo';
+            revokeBtn.className = 'px-2 py-1 rounded-sm border border-dark-outline text-[11px] font-label text-dark-on-surface-muted hover:text-red-disconnect hover:border-red-disconnect-border hover:bg-red-disconnect-soft transition-colors';
+            revokeBtn.textContent = 'Olvidar';
+            revokeBtn.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: 'revoke', device_id: item.device_id })
+              }).then(refreshState).catch(function () {});
+            });
+            right.appendChild(revokeBtn);
+          }
+          row.appendChild(right);
+          dropdownMenu.appendChild(row);
+        });
+
+        return items;
+      }
+
       function refreshState() {
         fetch('/api/state')
           .then(function (r) { return r.json(); })
           .then(function (s) {
             if (!s || !s.snapshot) return;
             const snap = s.snapshot;
+            const trustedDevices = Array.isArray(snap.trusted_devices) ? snap.trusted_devices : [];
             pcNameBadge.textContent = snap.pc_name || 'PC Windows';
             const verBadge = document.getElementById('build-version-badge');
             if (verBadge && s.sync_version) {
@@ -720,18 +828,43 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             document.getElementById('wfd-ip-label').textContent = (snap.wfd_ip || '192.168.137.1') + ':45362';
             document.getElementById('wfd-status-pill').textContent = snap.wfd_available ? 'Punto activo' : 'Sin Wi-Fi';
 
+            const deviceItems = renderDeviceDropdown(s, trustedDevices);
+            const savedCount = deviceItems.length;
+
             isPaused = !!s.paused;
+            btnPause.disabled = !s.connected;
+            btnDisconnect.disabled = !s.connected;
+
             if (s.connected) {
               activeName.textContent = s.device_name || 'Móvil Android';
-              activeMeta.textContent = isPaused ? 'Lector NFC en pausa' : ('Lector NFC activo • ' + (s.latency_ms || 1) + ' ms');
+              activeMeta.textContent = isPaused
+                ? 'Lector NFC en pausa'
+                : ('Lector NFC activo • ' + (s.latency_ms || 1) + ' ms');
               activeLed.className = 'w-2 h-2 rounded-full shrink-0 ' + (isPaused ? 'bg-amber-pause' : 'bg-led-green');
               activeIconWrap.className = 'w-10 h-10 rounded-sm bg-electric-blue-soft border border-electric-blue-border flex items-center justify-center shrink-0';
               activeIcon.textContent = 'smartphone';
               activeIcon.className = 'material-symbols-outlined text-electric-blue text-title-lg';
-              countBadge.textContent = '1 conectado';
+              countBadge.textContent = savedCount > 1 ? ('1 conectado • ' + savedCount + ' guardados') : '1 conectado';
+            } else if (!s.driver_online) {
+              activeName.textContent = s.last_device_name || (deviceItems[0] ? deviceItems[0].name : 'Driver detenido');
+              activeMeta.textContent = 'Inicia el servicio NfcBridgeDriver';
+              activeLed.className = 'w-2 h-2 rounded-full bg-red-disconnect shrink-0';
+              activeIconWrap.className = 'w-10 h-10 rounded-sm bg-dark-surface-elevated border border-dark-outline flex items-center justify-center shrink-0';
+              activeIcon.textContent = 'phonelink_off';
+              activeIcon.className = 'material-symbols-outlined text-dark-on-surface-muted text-title-lg';
+              countBadge.textContent = savedCount > 0 ? ('0 conectados • ' + savedCount + ' guardados') : '0 conectados';
+            } else if (s.last_device_name || deviceItems.length > 0) {
+              const savedProfile = s.last_device_name || deviceItems[0].name;
+              activeName.textContent = savedProfile;
+              activeMeta.textContent = 'Desconectado • Perfil guardado';
+              activeLed.className = 'w-2 h-2 rounded-full bg-red-disconnect shrink-0';
+              activeIconWrap.className = 'w-10 h-10 rounded-sm bg-dark-surface-elevated border border-dark-outline flex items-center justify-center shrink-0';
+              activeIcon.textContent = 'smartphone';
+              activeIcon.className = 'material-symbols-outlined text-dark-on-surface-muted text-title-lg';
+              countBadge.textContent = '0 conectados • ' + savedCount + (savedCount === 1 ? ' guardado' : ' guardados');
             } else {
-              activeName.textContent = s.driver_online ? 'Sin dispositivo' : 'Driver detenido';
-              activeMeta.textContent = s.driver_online ? 'Elige una opción y genera su QR' : 'Inicia el servicio NfcBridgeDriver';
+              activeName.textContent = 'Sin dispositivo';
+              activeMeta.textContent = 'Elige una opción y genera su QR';
               activeLed.className = 'w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0';
               activeIconWrap.className = 'w-10 h-10 rounded-sm bg-dark-surface-elevated border border-dark-outline flex items-center justify-center shrink-0';
               activeIcon.textContent = 'phonelink_off';

@@ -22,6 +22,8 @@ struct QrRequest {
 #[derive(Deserialize)]
 struct CommandRequest {
     command: String,
+    #[serde(default)]
+    device_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -220,6 +222,18 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                     "pause" => ipc.send_command(IpcCommand::SetPaused { paused: true }).await,
                     "resume" => ipc.send_command(IpcCommand::SetPaused { paused: false }).await,
                     "disconnect" => ipc.send_command(IpcCommand::DisconnectDevice).await,
+                    "revoke" => match req.device_id.filter(|id| !id.trim().is_empty()) {
+                        Some(device_id) => {
+                            let r = ipc
+                                .send_command(IpcCommand::RevokeTrustedDevice { device_id })
+                                .await;
+                            if r.is_ok() {
+                                let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            }
+                            r
+                        }
+                        None => Err(anyhow::anyhow!("Falta device_id")),
+                    },
                     _ => Err(anyhow::anyhow!("Comando desconocido")),
                 };
                 match res {
