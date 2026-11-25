@@ -121,7 +121,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           <span class="material-symbols-outlined text-electric-blue text-title-md">contactless</span>
         </div>
         <span class="font-headline text-title-md text-dark-on-surface tracking-tight" data-design-text-token="title-md">NFC Bridge Lite</span>
-        <span class="px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface-muted" data-design-text-token="label-md">Master PC Race</span>
+        <span id="pc-name-badge" class="px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface-muted" data-design-text-token="label-md">PC Windows</span>
       </div>
 
       <div class="flex items-center gap-1">
@@ -227,13 +227,13 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <!-- 1. Código QR único -->
-            <button type="button" data-panel="qr" class="conn-method-btn bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+            <!-- 1. Link único (Cloud Relay sin estar en la misma red) -->
+            <button type="button" data-panel="relay" class="conn-method-btn bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
               <div class="flex items-center gap-gutter-sm min-w-0">
-                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">qr_code_2</span>
+                <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">link</span>
                 <div class="flex flex-col min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">Código QR único</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Vinculación instantánea con cámara</span>
+                  <span class="font-label text-label-lg text-dark-on-surface truncate">Link único</span>
+                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Conexión remota en la nube sin Wi-Fi local</span>
                 </div>
               </div>
               <span class="material-symbols-outlined text-electric-blue text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -245,7 +245,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">bluetooth</span>
                 <div class="flex flex-col min-w-0">
                   <span class="font-label text-label-lg text-dark-on-surface truncate">Bluetooth</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Emparejar con número sin Wi-Fi</span>
+                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Emparejar sin Wi-Fi ni router</span>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -257,7 +257,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">wifi</span>
                 <div class="flex flex-col min-w-0">
                   <span class="font-label text-label-lg text-dark-on-surface truncate">Red Local (TCP)</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">IP, puerto y conexión manual</span>
+                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">IP, puerto o QR local en tu red</span>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -281,7 +281,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <span class="material-symbols-outlined text-electric-blue text-title-lg shrink-0" aria-hidden="true">usb</span>
                 <div class="flex flex-col min-w-0">
                   <span class="font-label text-label-lg text-dark-on-surface truncate">Cable USB</span>
-                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Conexión automática de prioridad máxima</span>
+                  <span class="font-label text-[11px] text-dark-on-surface-muted truncate">Conexión automática AOA de prioridad 1</span>
                 </div>
               </div>
               <span class="material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0" aria-hidden="true">chevron_right</span>
@@ -291,96 +291,69 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
       </div>
 
-      <!-- Columna derecha: Panel único de vinculación (QR único / Bluetooth / TCP / Wi-Fi Direct / USB) -->
+      <!-- Columna derecha: Panel único de vinculación (Link único / Bluetooth / TCP / Wi-Fi Direct / USB + Vista QR temporal) -->
       <aside class="bg-dark-surface-card border border-dark-outline rounded-md p-gutter-lg flex flex-col justify-between gap-gutter-md" aria-label="Panel de vinculación">
 
-        <!-- CASO 1: QR ÚNICO -->
-        <div id="panel-qr" class="conn-detail-panel flex flex-col items-center justify-between text-center gap-gutter-md h-full">
+        <!-- CASO 1: LINK ÚNICO (Relay Cloud fuera de la misma red Wi-Fi) -->
+        <div id="panel-relay" class="conn-detail-panel flex flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
-            <span class="font-headline text-title-md text-dark-on-surface">QR único</span>
-            <span class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-elevated">
-              <span class="w-1.5 h-1.5 rounded-full bg-electric-blue animate-pulse"></span>
-              Listo
-            </span>
+            <span class="font-headline text-title-md text-dark-on-surface">Link único (Nube)</span>
+            <span id="relay-status-pill" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-muted">Sin Relay</span>
           </div>
 
-          <div class="bg-white p-3 rounded-DEFAULT shadow-sm flex items-center justify-center">
-            <svg class="w-36 h-36 text-[#121212]" viewBox="0 0 29 29" shape-rendering="crispEdges" role="img" aria-label="Código QR único de conexión">
-              <path fill="currentColor" d="M0,0 h7 v7 h-7 z M1,1 v5 h5 v-5 z M2,2 h3 v3 h-3 z"></path>
-              <path fill="currentColor" d="M22,0 h7 v7 h-7 z M23,1 v5 h5 v-5 z M24,2 h3 v3 h-3 z"></path>
-              <path fill="currentColor" d="M0,22 h7 v7 h-7 z M1,23 v5 h5 v-5 z M2,24 h3 v3 h-3 z"></path>
-              <path fill="currentColor" d="
-                M9,0 h2 v1 h-2 z M13,0 h1 v2 h-1 z M16,0 h3 v1 h-3 z M20,0 h1 v3 h-1 z
-                M8,2 h2 v2 h-2 z M11,2 h1 v1 h-1 z M15,2 h2 v2 h-2 z M18,2 h1 v2 h-1 z
-                M9,5 h3 v1 h-3 z M14,5 h2 v1 h-2 z M18,5 h2 v2 h-2 z
-                M8,6 h1 v2 h-1 z M12,6 h1 v2 h-1 z M16,6 h1 v1 h-1 z
-                M0,8 h2 v1 h-2 z M4,8 h3 v1 h-3 z M9,8 h2 v2 h-2 z M13,8 h3 v1 h-3 z M18,8 h2 v1 h-2 z M22,8 h2 v2 h-2 z M26,8 h3 v1 h-3 z
-                M1,10 h3 v2 h-3 z M6,10 h2 v1 h-2 z M10,10 h1 v2 h-1 z M17,10 h2 v2 h-2 z M21,10 h2 v1 h-2 z M25,10 h3 v2 h-3 z
-                M0,13 h2 v2 h-2 z M4,13 h2 v1 h-2 z M8,13 h2 v2 h-2 z M19,13 h2 v2 h-2 z M23,13 h2 v1 h-2 z M27,13 h2 v2 h-2 z
-                M2,16 h3 v1 h-3 z M7,16 h2 v2 h-2 z M19,16 h1 v2 h-1 z M22,16 h3 v1 h-3 z M27,16 h2 v1 h-2 z
-                M0,18 h1 v2 h-1 z M3,18 h2 v2 h-2 z M8,19 h2 v1 h-2 z M12,19 h2 v2 h-2 z M16,19 h3 v1 h-3 z M21,19 h2 v2 h-2 z M25,19 h4 v1 h-4 z
-                M8,22 h3 v1 h-3 z M13,22 h2 v2 h-2 z M17,22 h2 v1 h-2 z M21,22 h3 v2 h-3 z M26,22 h2 v2 h-2 z
-                M9,24 h2 v2 h-2 z M12,25 h3 v1 h-3 z M16,24 h2 v2 h-2 z M20,25 h2 v2 h-2 z M24,25 h2 v1 h-2 z M28,24 h1 v3 h-1 z
-                M8,27 h2 v2 h-2 z M12,27 h2 v2 h-2 z M15,27 h3 v2 h-3 z M20,28 h3 v1 h-3 z M25,27 h3 v2 h-3 z
-              "></path>
-              <rect x="11.5" y="11.5" width="6" height="6" rx="1" fill="#FFFFFF"></rect>
-              <rect x="12.2" y="12.2" width="4.6" height="4.6" rx="0.8" fill="#3B82F6"></rect>
-              <circle cx="14.5" cy="14.5" r="1.1" fill="#FFFFFF"></circle>
-            </svg>
-          </div>
-
-          <div class="w-full flex flex-col gap-gutter-xs">
-            <div class="w-full bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-1.5 flex items-center justify-between gap-gutter-sm">
-              <span id="pc-unique-id" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">ID: 8F4A-29C1-E07B</span>
-              <button type="button" data-copy="8F4A-29C1-E07B" class="copy-btn text-dark-on-surface-muted hover:text-electric-blue inline-flex items-center gap-1 font-label text-[11px]">
-                <span class="material-symbols-outlined text-body-md" aria-hidden="true">content_copy</span>
-                <span>Copiar</span>
-              </button>
+          <div class="flex flex-col gap-gutter-sm">
+            <div class="flex flex-col gap-1">
+              <label for="relay-url-input" class="font-label text-[11px] text-dark-on-surface-muted">URL de tu Cloud Relay (Worker)</label>
+              <div class="flex items-center gap-1.5">
+                <input id="relay-url-input" type="url" placeholder="https://nfc-bridge-relay.tu-cuenta.workers.dev" class="flex-1 h-9 bg-dark-surface border border-dark-outline rounded-sm px-gutter-md font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:ring-0">
+                <button id="btn-save-relay" type="button" class="h-9 px-gutter-md rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline transition-colors">Guardar</button>
+              </div>
             </div>
-            <p class="font-body text-label-md text-dark-on-surface-muted text-pretty">
-              Escanea desde NFC Bridge Lite en tu celular para vincular al instante
+
+            <div class="bg-dark-surface border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm">
+              <span class="font-label text-label-md text-dark-on-surface-muted">Canal PC</span>
+              <span id="relay-channel-label" class="font-mono text-mono-sm text-dark-on-surface truncate">nb-...</span>
+            </div>
+
+            <p class="font-body text-[11px] text-dark-on-surface-muted">
+              Permite conectar tu celular desde datos móviles (4G/5G) u otra red sin instalar apps de terceros.
             </p>
           </div>
 
-          <button id="btn-refresh-qr" type="button" class="w-full h-9 rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center justify-center gap-1.5 hover:bg-dark-outline transition-colors">
-            <span class="material-symbols-outlined text-title-md text-dark-on-surface-muted" aria-hidden="true">refresh</span>
-            <span id="refresh-qr-label">Regenerar QR</span>
+          <button type="button" data-qr-method="relay" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
+            <span>Generar QR y Link único</span>
           </button>
         </div>
 
-        <!-- CASO 2: BLUETOOTH (Número para emparejar + conectar) -->
+        <!-- CASO 2: BLUETOOTH -->
         <div id="panel-bluetooth" class="conn-detail-panel hidden flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
             <span class="font-headline text-title-md text-dark-on-surface">Bluetooth</span>
-            <span class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border font-label text-[11px] text-on-electric-blue-soft">Visible</span>
+            <span id="bt-status-pill" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border font-label text-[11px] text-on-electric-blue-soft">Visible</span>
           </div>
 
-          <div class="flex flex-col gap-gutter-md">
-            <div class="bg-dark-surface-elevated border border-dark-outline rounded-md p-gutter-md text-center flex flex-col gap-1">
-              <span class="font-label text-[11px] text-dark-on-surface-muted uppercase tracking-wider">Número para emparejar</span>
-              <span class="font-mono text-headline-lg text-electric-blue tracking-[0.22em] tabular-nums">482 915</span>
-              <span class="font-body text-[11px] text-dark-on-surface-muted">Confirma este código en tu celular</span>
+          <div class="flex flex-col gap-gutter-sm">
+            <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between">
+              <span class="font-label text-label-md text-dark-on-surface-muted">Adaptador BT</span>
+              <span id="bt-name-label" class="font-mono text-mono-sm text-dark-on-surface truncate">HECTOR-MASTER</span>
             </div>
-
-            <div class="flex flex-col gap-1.5">
-              <div class="bg-dark-surface border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between">
-                <span class="font-label text-label-md text-dark-on-surface-muted">Nombre Bluetooth</span>
-                <span class="font-mono text-mono-sm text-dark-on-surface">Master-PC-BT</span>
-              </div>
-              <div class="bg-dark-surface border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between">
-                <span class="font-label text-label-md text-dark-on-surface-muted">Estado</span>
-                <span class="font-label text-label-md text-led-green">Listo para emparejar</span>
-              </div>
+            <div class="bg-dark-surface border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between">
+              <span class="font-label text-label-md text-dark-on-surface-muted">Dirección MAC</span>
+              <span id="bt-mac-label" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">--:--:--:--:--:--</span>
             </div>
+            <p class="font-body text-[11px] text-dark-on-surface-muted">
+              Genera un QR temporal para vincular por Bluetooth RFCOMM directo sin usar Wi-Fi.
+            </p>
           </div>
 
-          <button id="btn-bt-connect" type="button" class="w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
-            <span class="material-symbols-outlined text-title-md" aria-hidden="true">bluetooth_searching</span>
-            <span id="bt-connect-label">Conectar por Bluetooth</span>
+          <button type="button" data-qr-method="bluetooth" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
+            <span>Generar QR</span>
           </button>
         </div>
 
-        <!-- CASO 3: RED LOCAL (TCP) (IP, Puerto y conexión) -->
+        <!-- CASO 3: RED LOCAL (TCP) -->
         <div id="panel-tcp" class="conn-detail-panel hidden flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
             <span class="font-headline text-title-md text-dark-on-surface">Red Local (TCP)</span>
@@ -392,75 +365,70 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-2 flex flex-col">
                 <span class="font-label text-[11px] text-dark-on-surface-muted">IP de esta PC</span>
                 <div class="flex items-center justify-between gap-1">
-                  <span class="font-mono text-mono-sm text-dark-on-surface tabular-nums">192.168.1.45</span>
-                  <button type="button" data-copy="192.168.1.45" class="copy-btn text-dark-on-surface-muted hover:text-electric-blue" title="Copiar IP">
+                  <span id="tcp-ip-label" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">127.0.0.1</span>
+                  <button id="btn-copy-tcp-ip" type="button" data-copy="127.0.0.1" class="copy-btn text-dark-on-surface-muted hover:text-electric-blue" title="Copiar IP">
                     <span class="material-symbols-outlined text-body-md" aria-hidden="true">content_copy</span>
                   </button>
                 </div>
               </div>
               <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-2 flex flex-col">
                 <span class="font-label text-[11px] text-dark-on-surface-muted">Puerto</span>
-                <span class="font-mono text-mono-sm text-dark-on-surface tabular-nums">8765</span>
+                <span id="tcp-port-label" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">45362</span>
               </div>
             </div>
 
-            <div class="flex flex-col gap-1">
-              <label for="tcp-mobile-ip" class="font-label text-[11px] text-dark-on-surface-muted">IP y puerto del celular (opcional)</label>
-              <input id="tcp-mobile-ip" type="text" value="192.168.1.108:8765" class="w-full h-9 bg-dark-surface border border-dark-outline rounded-sm px-gutter-md font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:ring-0">
-            </div>
-
             <p class="font-body text-[11px] text-dark-on-surface-muted">
-              Ambos dispositivos deben estar en la misma red Wi-Fi o LAN.
+              Ambos dispositivos deben estar en la misma red Wi-Fi o LAN. Pulsa Generar QR para emparejar al instante.
             </p>
           </div>
 
-          <button id="btn-tcp-connect" type="button" class="w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
-            <span class="material-symbols-outlined text-title-md" aria-hidden="true">lan</span>
-            <span id="tcp-connect-label">Conectar por TCP</span>
+          <button type="button" data-qr-method="tcp" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
+            <span>Generar QR</span>
           </button>
         </div>
 
-        <!-- CASO 4: WI-FI DIRECT (SSID, Clave y conexión directa) -->
+        <!-- CASO 4: WI-FI DIRECT -->
         <div id="panel-wifidirect" class="conn-detail-panel hidden flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
             <span class="font-headline text-title-md text-dark-on-surface">Wi-Fi Direct</span>
-            <span class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border font-label text-[11px] text-on-electric-blue-soft">Punto activo</span>
+            <span id="wfd-status-pill" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-[11px] text-dark-on-surface-muted">En espera</span>
           </div>
 
           <div class="flex flex-col gap-gutter-sm">
             <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm">
               <div class="flex flex-col min-w-0">
                 <span class="font-label text-[11px] text-dark-on-surface-muted">Red directa (SSID)</span>
-                <span class="font-mono text-mono-sm text-dark-on-surface truncate">DIRECT-NFC-8F4A</span>
+                <span id="wfd-ssid-label" class="font-mono text-mono-sm text-dark-on-surface truncate">--</span>
               </div>
-              <button type="button" data-copy="DIRECT-NFC-8F4A" class="copy-btn text-dark-on-surface-muted hover:text-electric-blue font-label text-[11px] inline-flex items-center gap-1">
+              <button id="btn-copy-wfd-ssid" type="button" data-copy="" class="copy-btn text-dark-on-surface-muted hover:text-electric-blue font-label text-[11px] inline-flex items-center gap-1">
                 <span class="material-symbols-outlined text-body-md" aria-hidden="true">content_copy</span>
               </button>
             </div>
 
             <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm">
               <div class="flex flex-col min-w-0">
-                <span class="font-label text-[11px] text-dark-on-surface-muted">Clave de acceso</span>
-                <span class="font-mono text-mono-sm text-electric-blue tabular-nums">7492-1830</span>
+                <span class="font-label text-[11px] text-dark-on-surface-muted">Clave WPA2</span>
+                <span id="wfd-pass-label" class="font-mono text-mono-sm text-electric-blue tabular-nums">--</span>
               </div>
-              <button type="button" data-copy="7492-1830" class="copy-btn text-dark-on-surface-muted hover:text-electric-blue font-label text-[11px] inline-flex items-center gap-1">
+              <button id="btn-copy-wfd-pass" type="button" data-copy="" class="copy-btn text-dark-on-surface-muted hover:text-electric-blue font-label text-[11px] inline-flex items-center gap-1">
                 <span class="material-symbols-outlined text-body-md" aria-hidden="true">content_copy</span>
               </button>
             </div>
 
             <div class="bg-dark-surface border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between">
-              <span class="font-label text-label-md text-dark-on-surface-muted">Banda</span>
-              <span class="font-mono text-mono-sm text-dark-on-surface">5 GHz • Sin router</span>
+              <span class="font-label text-label-md text-dark-on-surface-muted">IP Grupo</span>
+              <span id="wfd-ip-label" class="font-mono text-mono-sm text-dark-on-surface">192.168.137.1:45362</span>
             </div>
           </div>
 
-          <button id="btn-wd-connect" type="button" class="w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
-            <span class="material-symbols-outlined text-title-md" aria-hidden="true">wifi_tethering</span>
-            <span id="wd-connect-label">Abrir enlace Wi-Fi Direct</span>
+          <button type="button" data-qr-method="wifi_direct" class="btn-generate-qr w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">qr_code_2</span>
+            <span>Generar QR</span>
           </button>
         </div>
 
-        <!-- CASO 5: CABLE USB (Estado ADB, prioridad máxima y detección) -->
+        <!-- CASO 5: CABLE USB -->
         <div id="panel-usb" class="conn-detail-panel hidden flex-col justify-between gap-gutter-md h-full">
           <div class="w-full flex items-center justify-between gap-gutter-sm">
             <span class="font-headline text-title-md text-dark-on-surface">Cable USB</span>
@@ -473,24 +441,48 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <span class="material-symbols-outlined text-electric-blue text-title-lg" aria-hidden="true">usb</span>
               </div>
               <div class="flex flex-col min-w-0">
-                <span class="font-label text-label-lg text-dark-on-surface">Pixel 8 Pro detectado</span>
-                <span class="font-mono text-[11px] text-dark-on-surface-muted tabular-nums">ADB • Latencia &lt; 1 ms</span>
+                <span class="font-label text-label-lg text-dark-on-surface">USB AOA nativo activo</span>
+                <span class="font-mono text-[11px] text-dark-on-surface-muted tabular-nums">Sin ADB • Plug &amp; Play</span>
               </div>
             </div>
 
-            <div class="bg-dark-surface border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between">
-              <span class="font-label text-label-md text-dark-on-surface-muted">Puerto túnel</span>
-              <span class="font-mono text-mono-sm text-dark-on-surface tabular-nums">localhost:8765</span>
-            </div>
-
             <p class="font-body text-[11px] text-dark-on-surface-muted">
-              Al conectar el cable con depuración USB activa, la sesión cambia automáticamente a USB.
+              Conecta el cable USB entre tu PC y celular y acepta NFC Bridge en el diálogo de Android.
             </p>
           </div>
 
-          <button id="btn-usb-connect" type="button" class="w-full h-10 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-lg inline-flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity">
+          <div class="w-full h-10 rounded-sm bg-dark-surface border border-dark-outline text-dark-on-surface-muted font-label text-label-md inline-flex items-center justify-center gap-1.5">
             <span class="material-symbols-outlined text-title-md" aria-hidden="true">cable</span>
-            <span id="usb-connect-label">Conectar por USB</span>
+            <span>Escucha automática por USB AOA</span>
+          </div>
+        </div>
+
+        <!-- VISTA QR TEMPORAL COMPARTIDA (se abre al pulsar "Generar QR" en cualquier método) -->
+        <div id="panel-qr-view" class="conn-detail-panel hidden flex-col items-center justify-between text-center gap-gutter-sm h-full">
+          <div class="w-full flex items-center justify-between gap-gutter-sm">
+            <button id="btn-qr-back" type="button" class="inline-flex items-center gap-1 font-label text-label-md text-dark-on-surface-muted hover:text-dark-on-surface">
+              <span class="material-symbols-outlined text-title-md" aria-hidden="true">arrow_back</span>
+              <span>Volver</span>
+            </button>
+            <span id="qr-method-badge" class="inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border font-label text-[11px] text-on-electric-blue-soft">TCP</span>
+          </div>
+
+          <div id="qr-svg-container" class="bg-white p-2.5 rounded-DEFAULT shadow-sm flex items-center justify-center w-44 h-44"></div>
+
+          <div class="w-full flex flex-col gap-1">
+            <div class="w-full bg-dark-surface-elevated border border-dark-outline rounded-sm px-gutter-md py-1.5 flex items-center justify-between gap-gutter-sm">
+              <span id="qr-token-label" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">PAIR-...</span>
+              <span id="qr-countdown-label" class="font-mono text-[11px] text-electric-blue tabular-nums">90s</span>
+            </div>
+            <button id="btn-copy-share-link" type="button" class="hidden w-full h-8 rounded-sm bg-dark-surface border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-surface-elevated inline-flex items-center justify-center gap-1">
+              <span class="material-symbols-outlined text-body-md" aria-hidden="true">content_copy</span>
+              <span>Copiar Link único</span>
+            </button>
+          </div>
+
+          <button id="btn-refresh-qr" type="button" class="w-full h-9 rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center justify-center gap-1.5 hover:bg-dark-outline transition-colors">
+            <span class="material-symbols-outlined text-title-md text-dark-on-surface-muted" aria-hidden="true">refresh</span>
+            <span id="refresh-qr-label">Regenerar QR</span>
           </button>
         </div>
 
@@ -501,59 +493,56 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
   <script>
     (function () {
-      const dropdownBtn = document.getElementById('btn-device-dropdown');
-      const dropdownMenu = document.getElementById('device-dropdown-menu');
-      const dropdownChevron = document.getElementById('device-dropdown-chevron');
       const activeName = document.getElementById('active-device-name');
       const activeMeta = document.getElementById('active-device-meta');
       const activeLed = document.getElementById('active-device-led');
       const activeIconWrap = document.getElementById('active-device-icon-wrap');
       const activeIcon = document.getElementById('active-device-icon');
       const countBadge = document.getElementById('device-count-badge');
+      const pcNameBadge = document.getElementById('pc-name-badge');
 
-      if (dropdownBtn && dropdownMenu) {
-        dropdownBtn.addEventListener('click', function () {
-          const isOpen = !dropdownMenu.classList.toggle('hidden');
-          dropdownBtn.setAttribute('aria-expanded', String(isOpen));
-          dropdownChevron.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+      const methodButtons = document.querySelectorAll('.conn-method-btn');
+      const detailPanels = document.querySelectorAll('.conn-detail-panel');
+      let currentPanelName = 'relay';
+      let currentQrMethod = null;
+      let currentShareLink = null;
+      let qrCountdownTimer = null;
+      let qrSecondsLeft = 0;
+
+      function showDetailPanel(panelKey) {
+        detailPanels.forEach(function (p) {
+          p.classList.add('hidden');
+          p.classList.remove('flex');
         });
+        const targetEl = document.getElementById('panel-' + panelKey);
+        if (targetEl) {
+          targetEl.classList.remove('hidden');
+          targetEl.classList.add('flex');
+        }
       }
 
-      document.querySelectorAll('.device-option').forEach(function (opt) {
-        opt.addEventListener('click', function () {
-          document.querySelectorAll('.device-option').forEach(function (o) {
-            o.classList.remove('bg-dark-surface-elevated');
-            o.setAttribute('aria-selected', 'false');
-            o.querySelector('.check-icon').classList.add('hidden');
+      methodButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          currentPanelName = btn.getAttribute('data-panel') || 'relay';
+          stopQrCountdown();
+          methodButtons.forEach(function (b) {
+            b.className = 'conn-method-btn bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
+            b.querySelector('span:last-child').className = 'material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0';
           });
-          opt.classList.add('bg-dark-surface-elevated');
-          opt.setAttribute('aria-selected', 'true');
-          opt.querySelector('.check-icon').classList.remove('hidden');
-
-          activeName.textContent = opt.getAttribute('data-device-name');
-          activeMeta.textContent = opt.getAttribute('data-device-meta');
-          activeLed.className = 'w-2 h-2 rounded-full bg-led-green shrink-0';
-          activeIconWrap.className = 'w-10 h-10 rounded-sm bg-electric-blue-soft border border-electric-blue-border flex items-center justify-center shrink-0';
-          activeIcon.textContent = 'smartphone';
-          activeIcon.className = 'material-symbols-outlined text-electric-blue text-title-lg';
-          countBadge.textContent = '1 conectado • 3 vinculados';
-
-          dropdownMenu.classList.add('hidden');
-          dropdownBtn.setAttribute('aria-expanded', 'false');
-          dropdownChevron.style.transform = 'rotate(0deg)';
+          btn.className = 'conn-method-btn bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
+          btn.querySelector('span:last-child').className = 'material-symbols-outlined text-electric-blue text-title-md shrink-0';
+          showDetailPanel(currentPanelName);
         });
       });
 
       const btnDisconnect = document.getElementById('btn-pc-disconnect');
       if (btnDisconnect) {
         btnDisconnect.addEventListener('click', function () {
-          activeName.textContent = 'Sin dispositivo';
-          activeMeta.textContent = 'Elige un móvil o método de conexión';
-          activeLed.className = 'w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0';
-          activeIconWrap.className = 'w-10 h-10 rounded-sm bg-dark-surface-elevated border border-dark-outline flex items-center justify-center shrink-0';
-          activeIcon.textContent = 'phonelink_off';
-          activeIcon.className = 'material-symbols-outlined text-dark-on-surface-muted text-title-lg';
-          countBadge.textContent = '0 conectados • 3 vinculados';
+          fetch('/api/command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'disconnect' })
+          }).catch(function () {});
         });
       }
 
@@ -563,50 +552,14 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       let isPaused = false;
       if (btnPause) {
         btnPause.addEventListener('click', function () {
-          isPaused = !isPaused;
-          btnPause.setAttribute('aria-pressed', String(isPaused));
-          if (isPaused) {
-            btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-amber-pause-soft border border-amber-pause text-on-amber-pause-soft font-label text-label-md inline-flex items-center gap-1 transition-colors';
-            btnPauseIcon.textContent = 'play_arrow';
-            btnPauseIcon.className = 'material-symbols-outlined text-title-md text-amber-pause';
-            btnPauseLabel.textContent = 'Reanudar';
-            activeLed.className = 'w-2 h-2 rounded-full bg-amber-pause shrink-0';
-            activeMeta.textContent = 'Lector NFC en pausa';
-          } else {
-            btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors hover:bg-dark-outline';
-            btnPauseIcon.textContent = 'pause';
-            btnPauseIcon.className = 'material-symbols-outlined text-title-md text-dark-on-surface-muted';
-            btnPauseLabel.textContent = 'Pausar';
-            activeLed.className = 'w-2 h-2 rounded-full bg-led-green shrink-0';
-            activeMeta.textContent = 'Lector NFC activo • TCP 4 ms';
-          }
+          const cmd = isPaused ? 'resume' : 'pause';
+          fetch('/api/command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd })
+          }).then(refreshState).catch(function () {});
         });
       }
-
-      const methodButtons = document.querySelectorAll('.conn-method-btn');
-      const detailPanels = document.querySelectorAll('.conn-detail-panel');
-
-      methodButtons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          const target = btn.getAttribute('data-panel');
-          methodButtons.forEach(function (b) {
-            b.className = 'conn-method-btn bg-dark-surface-card border border-dark-outline rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
-            b.querySelector('span:last-child').className = 'material-symbols-outlined text-dark-on-surface-muted text-title-md shrink-0';
-          });
-          btn.className = 'conn-method-btn bg-electric-blue-soft/35 border border-electric-blue-border rounded-sm px-gutter-md py-2 flex items-center justify-between gap-gutter-sm text-left transition-colors duration-state-change ease-state-change hover:bg-electric-blue-soft/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue';
-          btn.querySelector('span:last-child').className = 'material-symbols-outlined text-electric-blue text-title-md shrink-0';
-
-          detailPanels.forEach(function (p) {
-            p.classList.add('hidden');
-            p.classList.remove('flex');
-          });
-          const activePanel = document.getElementById('panel-' + target);
-          if (activePanel) {
-            activePanel.classList.remove('hidden');
-            activePanel.classList.add('flex');
-          }
-        });
-      });
 
       document.querySelectorAll('.copy-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -614,43 +567,181 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           if (navigator.clipboard && val) {
             navigator.clipboard.writeText(val).catch(function () {});
           }
-          const span = btn.querySelector('span:nth-child(2)');
-          if (span) {
-            const orig = span.textContent;
-            span.textContent = 'Copiado';
-            setTimeout(function () { span.textContent = orig; }, 1200);
-          }
         });
       });
 
-      const btnRefresh = document.getElementById('btn-refresh-qr');
-      const refreshLabel = document.getElementById('refresh-qr-label');
-      const pcId = document.getElementById('pc-unique-id');
-      const ids = ['8F4A-29C1-E07B', '3D92-71B4-A50E', 'C41E-9082-F31A'];
-      let idx = 0;
-      if (btnRefresh) {
-        btnRefresh.addEventListener('click', function () {
-          idx = (idx + 1) % ids.length;
-          pcId.textContent = 'ID: ' + ids[idx];
-          refreshLabel.textContent = 'QR actualizado';
-          setTimeout(function () { refreshLabel.textContent = 'Regenerar QR'; }, 1200);
-        });
+      function stopQrCountdown() {
+        if (qrCountdownTimer) {
+          clearInterval(qrCountdownTimer);
+          qrCountdownTimer = null;
+        }
       }
 
-      function bindConnectAction(btnId, labelId, doneText) {
-        const btn = document.getElementById(btnId);
-        const lbl = document.getElementById(labelId);
-        if (!btn || !lbl) return;
-        const orig = lbl.textContent;
-        btn.addEventListener('click', function () {
-          lbl.textContent = doneText;
-          setTimeout(function () { lbl.textContent = orig; }, 1500);
-        });
+      const qrMethodLabels = {
+        relay: 'Link único',
+        bluetooth: 'Bluetooth',
+        tcp: 'TCP LAN',
+        wifi_direct: 'Wi-Fi Direct'
+      };
+
+      function requestAndShowQr(method) {
+        currentQrMethod = method;
+        document.getElementById('qr-method-badge').textContent = qrMethodLabels[method] || method;
+        document.getElementById('qr-svg-container').innerHTML = '<span class="font-label text-label-md text-[#121212]">Generando...</span>';
+        showDetailPanel('qr-view');
+
+        fetch('/api/qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: method })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (!res.ok) {
+              document.getElementById('qr-svg-container').innerHTML = '<span class="font-label text-[11px] text-[#7F2929] px-2">' + (res.error || 'Driver no disponible') + '</span>';
+              return;
+            }
+            document.getElementById('qr-svg-container').innerHTML = res.svg;
+            document.getElementById('qr-token-label').textContent = res.pair_token;
+            currentShareLink = res.share_link || null;
+            const shareBtn = document.getElementById('btn-copy-share-link');
+            if (currentShareLink) {
+              shareBtn.classList.remove('hidden');
+            } else {
+              shareBtn.classList.add('hidden');
+            }
+
+            stopQrCountdown();
+            qrSecondsLeft = res.expires_in_secs || 90;
+            const cdEl = document.getElementById('qr-countdown-label');
+            cdEl.textContent = qrSecondsLeft + 's';
+            qrCountdownTimer = setInterval(function () {
+              qrSecondsLeft -= 1;
+              if (qrSecondsLeft <= 0) {
+                stopQrCountdown();
+                cdEl.textContent = 'Expirado';
+                cdEl.className = 'font-mono text-[11px] text-red-disconnect tabular-nums';
+              } else {
+                cdEl.textContent = qrSecondsLeft + 's';
+                cdEl.className = qrSecondsLeft <= 15
+                  ? 'font-mono text-[11px] text-amber-pause tabular-nums'
+                  : 'font-mono text-[11px] text-electric-blue tabular-nums';
+              }
+            }, 1000);
+          })
+          .catch(function () {
+            document.getElementById('qr-svg-container').innerHTML = '<span class="font-label text-[11px] text-[#7F2929]">Sin conexión con Sync</span>';
+          });
       }
-      bindConnectAction('btn-bt-connect', 'bt-connect-label', 'Conectando por Bluetooth...');
-      bindConnectAction('btn-tcp-connect', 'tcp-connect-label', 'Conectando por TCP...');
-      bindConnectAction('btn-wd-connect', 'wd-connect-label', 'Punto Wi-Fi Direct listo');
-      bindConnectAction('btn-usb-connect', 'usb-connect-label', 'Conectado por USB');
+
+      document.querySelectorAll('.btn-generate-qr').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          requestAndShowQr(btn.getAttribute('data-qr-method'));
+        });
+      });
+
+      document.getElementById('btn-qr-back').addEventListener('click', function () {
+        stopQrCountdown();
+        showDetailPanel(currentPanelName);
+      });
+
+      document.getElementById('btn-refresh-qr').addEventListener('click', function () {
+        if (currentQrMethod) requestAndShowQr(currentQrMethod);
+      });
+
+      document.getElementById('btn-copy-share-link').addEventListener('click', function () {
+        if (navigator.clipboard && currentShareLink) {
+          navigator.clipboard.writeText(currentShareLink).catch(function () {});
+          const span = this.querySelector('span:last-child');
+          span.textContent = 'Link copiado';
+          setTimeout(function () { span.textContent = 'Copiar Link único'; }, 1400);
+        }
+      });
+
+      const relayInput = document.getElementById('relay-url-input');
+      document.getElementById('btn-save-relay').addEventListener('click', function () {
+        const val = relayInput.value.trim();
+        fetch('/api/relay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: val || null })
+        }).then(refreshState).catch(function () {});
+      });
+
+      function refreshState() {
+        fetch('/api/state')
+          .then(function (r) { return r.json(); })
+          .then(function (s) {
+            if (!s || !s.snapshot) return;
+            const snap = s.snapshot;
+            pcNameBadge.textContent = snap.pc_name || 'PC Windows';
+
+            if (document.activeElement !== relayInput && snap.relay_url && !relayInput.value) {
+              relayInput.value = snap.relay_url;
+            }
+            document.getElementById('relay-channel-label').textContent = snap.relay_channel || 'nb-...';
+            const relayPill = document.getElementById('relay-status-pill');
+            if (snap.relay_connected) {
+              relayPill.textContent = 'Conectado';
+              relayPill.className = 'inline-flex items-center gap-1.5 px-gutter-sm py-0.5 rounded-full bg-electric-blue-soft border border-electric-blue-border font-label text-[11px] text-on-electric-blue-soft';
+            } else if (snap.relay_url) {
+              relayPill.textContent = 'Reconectando';
+            } else {
+              relayPill.textContent = 'Sin Relay';
+            }
+
+            document.getElementById('bt-name-label').textContent = snap.bt_name || snap.pc_name || 'Windows BT';
+            document.getElementById('bt-mac-label').textContent = snap.bt_mac || 'No disponible';
+            document.getElementById('bt-status-pill').textContent = snap.bt_available ? 'Listo' : 'Apagado';
+
+            const tcpIp = snap.tcp_ip || '127.0.0.1';
+            document.getElementById('tcp-ip-label').textContent = tcpIp;
+            document.getElementById('btn-copy-tcp-ip').setAttribute('data-copy', tcpIp);
+            document.getElementById('tcp-port-label').textContent = String(snap.tcp_port || 45362);
+
+            document.getElementById('wfd-ssid-label').textContent = snap.wfd_ssid || 'Sin adaptador Wi-Fi';
+            document.getElementById('btn-copy-wfd-ssid').setAttribute('data-copy', snap.wfd_ssid || '');
+            document.getElementById('wfd-pass-label').textContent = snap.wfd_passphrase || '--';
+            document.getElementById('btn-copy-wfd-pass').setAttribute('data-copy', snap.wfd_passphrase || '');
+            document.getElementById('wfd-ip-label').textContent = (snap.wfd_ip || '192.168.137.1') + ':45362';
+            document.getElementById('wfd-status-pill').textContent = snap.wfd_available ? 'Punto activo' : 'Sin Wi-Fi';
+
+            isPaused = !!s.paused;
+            if (s.connected) {
+              activeName.textContent = s.device_name || 'Móvil Android';
+              activeMeta.textContent = isPaused ? 'Lector NFC en pausa' : ('Lector NFC activo • ' + (s.latency_ms || 1) + ' ms');
+              activeLed.className = 'w-2 h-2 rounded-full shrink-0 ' + (isPaused ? 'bg-amber-pause' : 'bg-led-green');
+              activeIconWrap.className = 'w-10 h-10 rounded-sm bg-electric-blue-soft border border-electric-blue-border flex items-center justify-center shrink-0';
+              activeIcon.textContent = 'smartphone';
+              activeIcon.className = 'material-symbols-outlined text-electric-blue text-title-lg';
+              countBadge.textContent = '1 conectado';
+            } else {
+              activeName.textContent = s.driver_online ? 'Sin dispositivo' : 'Driver detenido';
+              activeMeta.textContent = s.driver_online ? 'Elige una opción y genera su QR' : 'Inicia el servicio NfcBridgeDriver';
+              activeLed.className = 'w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0';
+              activeIconWrap.className = 'w-10 h-10 rounded-sm bg-dark-surface-elevated border border-dark-outline flex items-center justify-center shrink-0';
+              activeIcon.textContent = 'phonelink_off';
+              activeIcon.className = 'material-symbols-outlined text-dark-on-surface-muted text-title-lg';
+              countBadge.textContent = '0 conectados';
+            }
+
+            if (isPaused) {
+              btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-amber-pause-soft border border-amber-pause text-on-amber-pause-soft font-label text-label-md inline-flex items-center gap-1 transition-colors';
+              btnPauseIcon.textContent = 'play_arrow';
+              btnPauseIcon.className = 'material-symbols-outlined text-title-md text-amber-pause';
+              btnPauseLabel.textContent = 'Reanudar';
+            } else {
+              btnPause.className = 'h-8 px-gutter-sm rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center gap-1 transition-colors hover:bg-dark-outline';
+              btnPauseIcon.textContent = 'pause';
+              btnPauseIcon.className = 'material-symbols-outlined text-title-md text-dark-on-surface-muted';
+              btnPauseLabel.textContent = 'Pausar';
+            }
+          })
+          .catch(function () {});
+      }
+
+      refreshState();
+      setInterval(refreshState, 1500);
     })();
   </script>
 

@@ -1,16 +1,18 @@
 //! # Driver IPC Client (Named Pipe)
 //!
-//! `nfc-bridge-sync` NO abre puertos de red ni habla directamente con el celular.
-//! Toda la conectividad (TCP, UDP Auto-Discovery, USB AOA, Bluetooth, Wi-Fi Direct)
+//! `nfc-bridge-sync` NO abre puertos de red hacia el celular ni emula PC/SC por su cuenta.
+//! Toda la conectividad (TCP, UDP Auto-Discovery, USB AOA, Bluetooth, Wi-Fi Direct y Cloud Relay)
 //! y la emulación PC/SC residen exclusivamente en `nfc-bridge-driver`.
 //!
-//! Este módulo conecta la interfaz de escritorio con el driver a través del canal local
-//! `\\.\pipe\nfc_bridge_driver`.
+//! Este módulo mantiene conexión bidireccional con el driver en `\\.\pipe\nfc_bridge_driver`,
+//! actualiza `DesktopLiveState` y permite que la UI local solicite QRs efímeros o envíe órdenes.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tracing::{info, warn};
 
 use crate::driver_manager::DRIVER_NAMED_PIPE;
@@ -20,6 +22,9 @@ use crate::driver_manager::DRIVER_NAMED_PIPE;
 pub enum IpcCommand {
     GetStatus,
     GetWifiDirectInfo,
+    GetTransportSnapshot,
+    IssuePairingToken { method: String },
+    SetRelayUrl { url: Option<String> },
     SetPaused { paused: bool },
     SetUsbPriority { enabled: bool },
     DisconnectDevice,
@@ -46,6 +51,28 @@ pub enum IpcEvent {
         port: u16,
         reason: Option<String>,
     },
+    TransportSnapshot {
+        pc_name: String,
+        tcp_ip: Option<String>,
+        tcp_port: u16,
+        bt_available: bool,
+        bt_mac: Option<String>,
+        bt_name: Option<String>,
+        relay_url: Option<String>,
+        relay_channel: String,
+        relay_connected: bool,
+        wfd_available: bool,
+        wfd_ssid: Option<String>,
+        wfd_passphrase: Option<String>,
+        wfd_ip: Option<String>,
+    },
+    PairingTokenIssued {
+        method: String,
+        pair_token: String,
+        expires_in_secs: u64,
+        uri: String,
+        share_link: Option<String>,
+    },
     DeviceConnected {
         device_name: String,
         endpoint: String,
@@ -65,15 +92,124 @@ pub enum IpcEvent {
     },
 }
 
-pub struct DriverIpcClient;
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct IssuedQrData {
+    pub method: String,
+    pub pair_token: String,
+    pub expires_in_secs: u64,
+    pub uri: String,
+    pub share_link: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransportSnapshotData {
+    pub pc_name: String,
+    pub tcp_ip: Option<String>,
+    pub tcp_port: u16,
+    pub bt_available: bool,
+    pub bt_mac: Option<String>,
+    pub bt_name: Option<String>,
+    pub relay_url: Option<String>,
+    pub relay_channel: String,
+    pub relay_connected: bool,
+    pub wfd_available: bool,
+    pub wfd_ssid: Option<String>,
+    pub wfd_passphrase: Option<String>,
+    pub wfd_ip: Option<String>,
+}
+
+impl Default for TransportSnapshotData {
+    fn default() -> Self {
+        Self {
+            pc_name: std::env::var("COMPUTERNAME").unwrap_or_else(|_| "NFC Bridge PC".to_string()),
+            tcp_ip: None,
+            tcp_port: 45362,
+            bt_available: false,
+            bt_mac: None,
+            bt_name: None,
+            relay_url: None,
+            relay_channel: String::new(),
+            relay_connected: false,
+            wfd_available: false,
+            wfd_ssid: None,
+            wfd_passphrase: None,
+            wfd_ip: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct DesktopLiveState {
+    pub driver_online: bool,
+    pub connected: bool,
+    pub device_name: Option<String>,
+    pub endpoint: Option<String>,
+    pub latency_ms: u64,
+    pub paused: bool,
+    pub tag_present: bool,
+    pub tag_uid: Option<String>,
+    pub snapshot: TransportSnapshotData,
+}
+
+#[derive(Clone)]
+pub struct DriverIpcClient {
+    state: Arc<RwLock<DesktopLiveState>>,
+    cmd_tx: Arc<Mutex<Option<mpsc::Sender<IpcCommand>>>>,
+    pending_qr_waiter: Arc<Mutex<Option<oneshot::Sender<IssuedQrData>>>>,
+}
 
 impl DriverIpcClient {
     pub fn new() -> Self {
-        Self
+        Self {
+            state: Arc::new(RwLock::new(DesktopLiveState::default())),
+            cmd_tx: Arc::new(Mutex::new(None)),
+            pending_qr_waiter: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub async fn get_live_state(&self) -> DesktopLiveState {
+        self.state.read().await.clone()
+    }
+
+    pub async fn send_command(&self, cmd: IpcCommand) -> Result<()> {
+        let tx = {
+            let guard = self.cmd_tx.lock().await;
+            guard.clone()
+        };
+        let Some(sender) = tx else {
+            anyhow::bail!("Driver desconectado del canal IPC");
+        };
+        sender
+            .send(cmd)
+            .await
+            .map_err(|_| anyhow::anyhow!("No se pudo enviar comando al driver"))
+    }
+
+    pub async fn request_pairing_qr(&self, method: &str) -> Result<IssuedQrData> {
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut waiter = self.pending_qr_waiter.lock().await;
+            *waiter = Some(tx);
+        }
+
+        if let Err(e) = self
+            .send_command(IpcCommand::IssuePairingToken {
+                method: method.to_string(),
+            })
+            .await
+        {
+            let mut waiter = self.pending_qr_waiter.lock().await;
+            *waiter = None;
+            return Err(e);
+        }
+
+        tokio::time::timeout(Duration::from_secs(3), rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Timeout esperando QR del driver"))?
+            .map_err(|_| anyhow::anyhow!("Canal QR cerrado"))
     }
 
     /// Mantiene conexión IPC persistente con `nfc-bridge-driver`.
-    /// Si el driver no está iniciado, espera sin abrir ningún puerto de red alternativo.
     pub async fn run_forever(&self) -> Result<()> {
         let mut logged_waiting = false;
 
@@ -87,11 +223,20 @@ impl DriverIpcClient {
                     if !logged_waiting {
                         logged_waiting = true;
                         warn!(
-                            "Esperando a NFC Bridge Driver ({})... Sin el driver activo no es posible conectar por TCP, USB AOA, Bluetooth ni Wi-Fi Direct.",
+                            "Esperando a NFC Bridge Driver ({})... Sin el driver activo no es posible conectar por TCP, USB AOA, Bluetooth, Wi-Fi Direct ni Relay.",
                             DRIVER_NAMED_PIPE
                         );
                     }
                 }
+            }
+            {
+                let mut guard = self.cmd_tx.lock().await;
+                *guard = None;
+            }
+            {
+                let mut st = self.state.write().await;
+                st.driver_online = false;
+                st.connected = false;
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
@@ -105,12 +250,43 @@ impl DriverIpcClient {
             let client = ClientOptions::new().open(DRIVER_NAMED_PIPE)?;
             info!("Enlazado con NFC Bridge Driver vía IPC ({})", DRIVER_NAMED_PIPE);
 
-            let (reader, _writer) = tokio::io::split(client);
+            {
+                let mut st = self.state.write().await;
+                st.driver_online = true;
+            }
+
+            let (tx, mut rx) = mpsc::channel::<IpcCommand>(32);
+            {
+                let mut guard = self.cmd_tx.lock().await;
+                *guard = Some(tx.clone());
+            }
+
+            let (reader, mut writer) = tokio::io::split(client);
             let mut lines = BufReader::new(reader).lines();
 
-            while let Ok(Some(line)) = lines.next_line().await {
-                if let Ok(event) = serde_json::from_str::<IpcEvent>(&line) {
-                    Self::handle_driver_event(event);
+            // Solicitar snapshot inicial de transportes
+            let _ = tx.send(IpcCommand::GetTransportSnapshot).await;
+
+            loop {
+                tokio::select! {
+                    Some(cmd) = rx.recv() => {
+                        if let Ok(json) = serde_json::to_string(&cmd) {
+                            if writer.write_all(format!("{}\n", json).as_bytes()).await.is_err() {
+                                break;
+                            }
+                            let _ = writer.flush().await;
+                        }
+                    }
+                    line_res = lines.next_line() => {
+                        match line_res {
+                            Ok(Some(line)) => {
+                                if let Ok(event) = serde_json::from_str::<IpcEvent>(&line) {
+                                    self.handle_driver_event(event).await;
+                                }
+                            }
+                            _ => break,
+                        }
+                    }
                 }
             }
 
@@ -122,7 +298,7 @@ impl DriverIpcClient {
         }
     }
 
-    fn handle_driver_event(event: IpcEvent) {
+    async fn handle_driver_event(&self, event: IpcEvent) {
         match event {
             IpcEvent::Status {
                 connected,
@@ -132,6 +308,15 @@ impl DriverIpcClient {
                 tag_present,
                 tag_uid,
             } => {
+                {
+                    let mut st = self.state.write().await;
+                    st.connected = connected;
+                    st.device_name = device_name.clone();
+                    st.latency_ms = latency_ms;
+                    st.paused = paused;
+                    st.tag_present = tag_present;
+                    st.tag_uid = tag_uid.clone();
+                }
                 if connected {
                     info!(
                         "[Driver] Estado: Conectado a '{}' ({} ms) | Pausado={} | Tag={:?}",
@@ -144,29 +329,6 @@ impl DriverIpcClient {
                     info!("[Driver] Listo y en escucha (sin teléfono conectado aún).");
                 }
             }
-            IpcEvent::DeviceConnected {
-                device_name,
-                endpoint,
-            } => {
-                info!("[Driver] Dispositivo Android conectado: '{}' vía {}", device_name, endpoint);
-            }
-            IpcEvent::DeviceDisconnected => {
-                info!("[Driver] Dispositivo Android desconectado.");
-            }
-            IpcEvent::TagAttached {
-                uid,
-                technologies,
-                is_ntag215,
-            } => {
-                info!(
-                    "[Driver] Etiqueta NFC detectada: UID={} | Techs={:?} | NTAG215={}",
-                    uid, technologies, is_ntag215
-                );
-            }
-            IpcEvent::TagDetached => {
-                info!("[Driver] Etiqueta NFC retirada del campo.");
-            }
-            IpcEvent::LatencyUpdated { .. } => {}
             IpcEvent::WifiDirectStatus {
                 available,
                 active,
@@ -177,6 +339,14 @@ impl DriverIpcClient {
                 port,
                 reason,
             } => {
+                {
+                    let mut st = self.state.write().await;
+                    st.snapshot.pc_name = pc_name.clone();
+                    st.snapshot.wfd_available = available && active;
+                    st.snapshot.wfd_ssid = ssid.clone();
+                    st.snapshot.wfd_passphrase = passphrase.clone();
+                    st.snapshot.wfd_ip = ip.clone();
+                }
                 if available && active {
                     if let (Some(ssid), Some(pass)) = (ssid.as_deref(), passphrase.as_deref()) {
                         let target_ip = ip.as_deref().unwrap_or("192.168.137.1");
@@ -190,6 +360,106 @@ impl DriverIpcClient {
                 } else if let Some(msg) = reason {
                     info!("[Driver] Wi-Fi Direct no disponible: {}", msg);
                 }
+            }
+            IpcEvent::TransportSnapshot {
+                pc_name,
+                tcp_ip,
+                tcp_port,
+                bt_available,
+                bt_mac,
+                bt_name,
+                relay_url,
+                relay_channel,
+                relay_connected,
+                wfd_available,
+                wfd_ssid,
+                wfd_passphrase,
+                wfd_ip,
+            } => {
+                let mut st = self.state.write().await;
+                st.snapshot = TransportSnapshotData {
+                    pc_name,
+                    tcp_ip,
+                    tcp_port,
+                    bt_available,
+                    bt_mac,
+                    bt_name,
+                    relay_url,
+                    relay_channel,
+                    relay_connected,
+                    wfd_available,
+                    wfd_ssid,
+                    wfd_passphrase,
+                    wfd_ip,
+                };
+            }
+            IpcEvent::PairingTokenIssued {
+                method,
+                pair_token,
+                expires_in_secs,
+                uri,
+                share_link,
+            } => {
+                let data = IssuedQrData {
+                    method,
+                    pair_token,
+                    expires_in_secs,
+                    uri,
+                    share_link,
+                };
+                if let Some(waiter) = self.pending_qr_waiter.lock().await.take() {
+                    let _ = waiter.send(data);
+                }
+            }
+            IpcEvent::DeviceConnected {
+                device_name,
+                endpoint,
+            } => {
+                {
+                    let mut st = self.state.write().await;
+                    st.connected = true;
+                    st.device_name = Some(device_name.clone());
+                    st.endpoint = Some(endpoint.clone());
+                }
+                info!("[Driver] Dispositivo Android conectado: '{}' vía {}", device_name, endpoint);
+            }
+            IpcEvent::DeviceDisconnected => {
+                {
+                    let mut st = self.state.write().await;
+                    st.connected = false;
+                    st.device_name = None;
+                    st.endpoint = None;
+                    st.tag_present = false;
+                    st.tag_uid = None;
+                }
+                info!("[Driver] Dispositivo Android desconectado.");
+            }
+            IpcEvent::LatencyUpdated { latency_ms } => {
+                let mut st = self.state.write().await;
+                st.latency_ms = latency_ms;
+            }
+            IpcEvent::TagAttached {
+                uid,
+                technologies,
+                is_ntag215,
+            } => {
+                {
+                    let mut st = self.state.write().await;
+                    st.tag_present = true;
+                    st.tag_uid = Some(uid.clone());
+                }
+                info!(
+                    "[Driver] Etiqueta NFC detectada: UID={} | Techs={:?} | NTAG215={}",
+                    uid, technologies, is_ntag215
+                );
+            }
+            IpcEvent::TagDetached => {
+                {
+                    let mut st = self.state.write().await;
+                    st.tag_present = false;
+                    st.tag_uid = None;
+                }
+                info!("[Driver] Etiqueta NFC retirada del campo.");
             }
             IpcEvent::Error { message } => {
                 warn!("[Driver Error] {}", message);

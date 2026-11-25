@@ -1,5 +1,8 @@
 use anyhow::Result;
-use nfc_bridge_sync::{AppConfig, DriverIpcClient, DriverManager, DriverStatus, EmbeddedUi};
+use nfc_bridge_sync::ui_http::DEFAULT_UI_HTTP_PORT;
+use nfc_bridge_sync::{
+    AppConfig, DesktopUiServer, DriverIpcClient, DriverManager, DriverStatus, EmbeddedUi,
+};
 use std::net::UdpSocket;
 use tracing::{info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -28,6 +31,7 @@ async fn main() -> Result<()> {
     println!("==================================================");
     println!(" [IP de esta PC] : {}", local_ip);
     println!(" [Identidad PC]  : {}", config.pc_name);
+    println!(" [Panel Web/UI]  : http://127.0.0.1:{}", DEFAULT_UI_HTTP_PORT);
     println!(" [Arquitectura]  : Cliente Visual IPC -> Driver");
     println!("==================================================");
 
@@ -73,6 +77,18 @@ async fn main() -> Result<()> {
 
     // Conectarse exclusivamente al driver vía Named Pipe IPC (nunca abre puertos de red por su cuenta)
     let ipc_client = DriverIpcClient::new();
+    let ui_server = DesktopUiServer::new(ipc_client.clone(), DEFAULT_UI_HTTP_PORT);
+    tokio::spawn(async move {
+        ui_server.run().await;
+    });
+
+    if std::env::args().any(|a| a == "--open-ui" || a == "--ui") {
+        let url = format!("http://127.0.0.1:{}", DEFAULT_UI_HTTP_PORT);
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn();
+    }
+
     ipc_client.run_forever().await?;
 
     Ok(())
