@@ -936,10 +936,9 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         }).then(refreshState).catch(function () {});
       });
 
-      function renderDeviceDropdown(s, trustedDevices) {
+      function renderDeviceDropdown(s, trustedDevices, forceRender) {
         const items = [];
         const activeNameVal = s.connected ? (s.device_name || 'Móvil Android') : null;
-        const lastKnownName = s.last_device_name || null;
         let matchedActive = false;
 
         trustedDevices.forEach(function (d) {
@@ -979,25 +978,14 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             latency_ms: s.latency_ms || 1,
             revocable: false
           });
-        } else if (!s.connected && lastKnownName && items.length === 0) {
-          items.unshift({
-            device_id: null,
-            name: lastKnownName,
-            mobile_id: s.last_mobile_id || null,
-            device_os: s.last_device_os || null,
-            transport: s.last_transport || null,
-            active: false,
-            paused: false,
-            endpoint: s.last_endpoint || '',
-            latency_ms: 0,
-            revocable: false
-          });
         }
 
-        if (editingDeviceId && items.some(function (i) { return i.device_id === editingDeviceId; })) {
+        if (!forceRender && editingDeviceId && items.some(function (i) { return i.device_id === editingDeviceId; })) {
           return items;
         }
-        editingDeviceId = null;
+        if (!items.some(function (i) { return i.device_id === editingDeviceId; })) {
+          editingDeviceId = null;
+        }
         dropdownMenu.replaceChildren();
 
         if (items.length === 0) {
@@ -1061,23 +1049,27 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
           if (editingDeviceId && editingDeviceId === item.device_id) {
             const editWrap = document.createElement('div');
-            editWrap.className = 'flex items-center gap-1 min-w-0';
+            editWrap.className = 'flex items-center gap-1.5 min-w-0 w-full';
             const input = document.createElement('input');
             input.type = 'text';
             input.value = item.name;
             input.maxLength = 48;
-            input.className = 'w-full min-w-0 h-7 bg-dark-surface border border-electric-blue rounded-sm px-2 font-label text-label-md text-dark-on-surface focus:ring-0';
+            input.className = 'flex-1 min-w-0 h-7 bg-dark-surface border border-electric-blue rounded-sm px-2 font-label text-label-md text-dark-on-surface focus:outline-none';
             input.addEventListener('click', function (ev) { ev.stopPropagation(); });
 
             function commitRename() {
               const newName = input.value.trim();
               if (!newName) return;
               editingDeviceId = null;
+              item.name = newName;
+              const targetTrusted = trustedDevices.find(function (d) { return d.device_id === item.device_id; });
+              if (targetTrusted) targetTrusted.device_name = newName;
+              renderDeviceDropdown(s, trustedDevices, true);
               fetch('/api/command', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command: 'rename', device_id: item.device_id, name: newName })
-              }).then(refreshState).catch(function () { refreshState(); });
+              }).then(function () { refreshState(); }).catch(function () { refreshState(); });
             }
 
             input.addEventListener('keydown', function (ev) {
@@ -1087,15 +1079,16 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               } else if (ev.key === 'Escape') {
                 ev.preventDefault();
                 editingDeviceId = null;
-                refreshState();
+                renderDeviceDropdown(s, trustedDevices, true);
               }
             });
 
             const saveBtn = document.createElement('button');
             saveBtn.type = 'button';
-            saveBtn.title = 'Guardar nombre';
-            saveBtn.className = 'w-7 h-7 rounded-sm bg-electric-blue text-on-electric-blue inline-flex items-center justify-center shrink-0';
-            saveBtn.innerHTML = '<span class="material-symbols-outlined text-[15px]" aria-hidden="true">check</span>';
+            saveBtn.title = 'Aplicar nombre';
+            saveBtn.setAttribute('aria-label', 'Aplicar nombre');
+            saveBtn.className = 'w-7 h-7 aspect-square rounded-sm bg-electric-blue text-on-electric-blue inline-flex items-center justify-center shrink-0 hover:opacity-95 transition-opacity';
+            saveBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]" aria-hidden="true">check</span>';
             saveBtn.addEventListener('click', function (ev) {
               ev.stopPropagation();
               commitRename();
@@ -1150,7 +1143,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             editBtn.addEventListener('click', function (ev) {
               ev.stopPropagation();
               editingDeviceId = (editingDeviceId === item.device_id) ? null : item.device_id;
-              renderDeviceDropdown(s, trustedDevices);
+              renderDeviceDropdown(s, trustedDevices, true);
             });
             right.appendChild(editBtn);
 
@@ -1163,11 +1156,20 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             revokeBtn.addEventListener('click', function (ev) {
               ev.stopPropagation();
               editingDeviceId = null;
+              const nextTrusted = trustedDevices.filter(function (d) { return d.device_id !== item.device_id; });
+              if (s.snapshot) s.snapshot.trusted_devices = nextTrusted;
+              const remaining = renderDeviceDropdown(s, nextTrusted, true);
+              if (remaining.length === 0) {
+                setDropdownOpen(false);
+                hasDevicesInList = false;
+                btnDropdown.disabled = true;
+                dropdownChevron.classList.add('hidden');
+              }
               fetch('/api/command', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command: 'revoke', device_id: item.device_id })
-              }).then(refreshState).catch(function () {});
+              }).then(function () { refreshState(); }).catch(function () { refreshState(); });
             });
             right.appendChild(revokeBtn);
           }

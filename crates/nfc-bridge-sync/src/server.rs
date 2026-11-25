@@ -299,6 +299,82 @@ impl DriverIpcClient {
         }
     }
 
+    pub async fn remove_saved_profile(&self, device_id: &str) {
+        let mut st = self.state.write().await;
+        st.snapshot
+            .trusted_devices
+            .retain(|d| d.device_id != device_id);
+        if st.active_device_id.as_deref() == Some(device_id) {
+            st.connected = false;
+            st.device_name = None;
+            st.endpoint = None;
+            st.device_os = None;
+            st.active_device_id = None;
+            st.paused = false;
+            st.tag_present = false;
+            st.tag_uid = None;
+        }
+        Self::reconcile_saved_selection(&mut st, Some(device_id));
+    }
+
+    pub async fn rename_saved_profile(&self, device_id: &str, new_name: &str) {
+        let mut st = self.state.write().await;
+        if let Some(dev) = st
+            .snapshot
+            .trusted_devices
+            .iter_mut()
+            .find(|d| d.device_id == device_id)
+        {
+            dev.device_name = new_name.to_string();
+        }
+        if st.connected && st.active_device_id.as_deref() == Some(device_id) {
+            st.device_name = Some(new_name.to_string());
+        }
+        if st.selected_device_id.as_deref() == Some(device_id)
+            || st.active_device_id.as_deref() == Some(device_id)
+        {
+            st.last_device_name = Some(new_name.to_string());
+        }
+    }
+
+    fn reconcile_saved_selection(st: &mut DesktopLiveState, removed_id: Option<&str>) {
+        let still_exists = st
+            .selected_device_id
+            .as_deref()
+            .map(|sid| st.snapshot.trusted_devices.iter().any(|d| d.device_id == sid))
+            .unwrap_or(false);
+        if !still_exists || removed_id.is_some_and(|rid| st.selected_device_id.as_deref() == Some(rid))
+        {
+            st.selected_device_id = st
+                .snapshot
+                .trusted_devices
+                .first()
+                .map(|d| d.device_id.clone());
+        }
+        if !st.connected {
+            if let Some(first_or_sel) = st
+                .selected_device_id
+                .as_deref()
+                .and_then(|sid| st.snapshot.trusted_devices.iter().find(|d| d.device_id == sid))
+                .or_else(|| st.snapshot.trusted_devices.first())
+                .cloned()
+            {
+                st.last_device_name = Some(first_or_sel.device_name);
+                st.last_transport = first_or_sel.transport;
+                st.last_mobile_id = first_or_sel.mobile_id;
+                st.last_device_os = first_or_sel.device_os;
+                st.last_endpoint = first_or_sel.endpoint;
+            } else {
+                st.selected_device_id = None;
+                st.last_device_name = None;
+                st.last_transport = None;
+                st.last_mobile_id = None;
+                st.last_device_os = None;
+                st.last_endpoint = None;
+            }
+        }
+    }
+
     pub async fn send_command(&self, cmd: IpcCommand) -> Result<()> {
         let tx = {
             let guard = self.cmd_tx.lock().await;
@@ -563,6 +639,7 @@ impl DriverIpcClient {
                     driver_build_id,
                     trusted_devices,
                 };
+                Self::reconcile_saved_selection(&mut st, None);
             }
             IpcEvent::PairingTokenIssued {
                 method,

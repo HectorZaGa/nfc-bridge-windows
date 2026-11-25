@@ -291,12 +291,14 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                     }
                     "revoke" => match req.device_id.filter(|id| !id.trim().is_empty()) {
                         Some(device_id) => {
+                            ipc.remove_saved_profile(&device_id).await;
                             let r = ipc
                                 .send_command(IpcCommand::RevokeTrustedDevice { device_id })
                                 .await;
                             if r.is_ok() {
                                 let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
-                                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                                let _ = ipc.send_command(IpcCommand::GetStatus).await;
+                                tokio::time::sleep(std::time::Duration::from_millis(40)).await;
                             }
                             r
                         }
@@ -307,13 +309,14 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                         req.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()),
                     ) {
                         (Some(device_id), Some(name)) => {
+                            ipc.rename_saved_profile(&device_id, &name).await;
                             let r = ipc
                                 .send_command(IpcCommand::RenameTrustedDevice { device_id, name })
                                 .await;
                             if r.is_ok() {
                                 let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
                                 let _ = ipc.send_command(IpcCommand::GetStatus).await;
-                                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                                tokio::time::sleep(std::time::Duration::from_millis(40)).await;
                             }
                             r
                         }
