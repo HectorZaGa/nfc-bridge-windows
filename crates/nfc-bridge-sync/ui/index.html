@@ -154,7 +154,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           <!-- Misma tarjeta unificada con selector desplegable + botones Pausar y Desconectar adentro -->
           <div id="active-device-card" class="bg-dark-surface-card border border-dark-outline rounded-md p-gutter-md flex items-center justify-between gap-gutter-sm">
             <!-- Área clickeable con flecha para abrir menú de dispositivos vinculados -->
-            <button id="btn-device-dropdown" type="button" aria-expanded="false" aria-haspopup="listbox" title="Ver dispositivos vinculados" class="flex items-center gap-gutter-sm min-w-0 flex-1 text-left rounded-sm px-1.5 py-1 -mx-1.5 -my-1 transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+            <button id="btn-device-dropdown" type="button" disabled aria-expanded="false" aria-haspopup="false" class="flex items-center gap-gutter-sm min-w-0 flex-1 text-left rounded-sm px-1.5 py-1 -mx-1.5 -my-1 transition-colors duration-state-change ease-state-change enabled:hover:bg-dark-surface-elevated disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
               <div id="active-device-icon-wrap" class="w-10 h-10 rounded-sm bg-dark-surface-elevated border border-dark-outline flex items-center justify-center shrink-0" aria-hidden="true">
                 <span id="active-device-icon" class="material-symbols-outlined text-dark-on-surface-muted text-title-lg">phonelink_off</span>
               </div>
@@ -162,7 +162,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
                 <div class="flex items-center gap-1.5 min-w-0">
                   <span id="active-device-name" class="font-headline text-title-md text-dark-on-surface-card truncate" data-design-text-token="title-md">Sin dispositivo</span>
                   <span id="active-device-led" class="w-2 h-2 rounded-full bg-dark-on-surface-muted shrink-0" title="Desconectado" aria-label="Desconectado"></span>
-                  <span id="device-dropdown-chevron" class="material-symbols-outlined text-title-md text-dark-on-surface-muted transition-transform duration-state-change shrink-0" aria-hidden="true">expand_more</span>
+                  <span id="device-dropdown-chevron" class="hidden material-symbols-outlined text-title-md text-dark-on-surface-muted transition-transform duration-state-change shrink-0" aria-hidden="true">expand_more</span>
                 </div>
                 <span id="active-device-meta" class="font-label text-label-md text-dark-on-surface-muted tabular-nums truncate" data-design-text-token="label-md">Elige una opción y genera su QR</span>
               </div>
@@ -530,8 +530,12 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       const dropdownMenu = document.getElementById('device-dropdown-menu');
       const dropdownChevron = document.getElementById('device-dropdown-chevron');
       let isDropdownOpen = false;
+      let hasDevicesInList = false;
 
       function setDropdownOpen(open) {
+        if (open && !hasDevicesInList) {
+          open = false;
+        }
         isDropdownOpen = open;
         dropdownMenu.classList.toggle('hidden', !open);
         btnDropdown.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -540,6 +544,10 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
       btnDropdown.addEventListener('click', function (e) {
         e.stopPropagation();
+        if (!hasDevicesInList) {
+          setDropdownOpen(false);
+          return;
+        }
         setDropdownOpen(!isDropdownOpen);
       });
 
@@ -1045,6 +1053,14 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
 
             const deviceItems = renderDeviceDropdown(s, trustedDevices);
             const savedCount = deviceItems.length;
+            hasDevicesInList = savedCount > 0;
+            btnDropdown.disabled = !hasDevicesInList;
+            btnDropdown.setAttribute('aria-haspopup', hasDevicesInList ? 'listbox' : 'false');
+            btnDropdown.title = hasDevicesInList ? 'Ver dispositivos vinculados' : '';
+            dropdownChevron.classList.toggle('hidden', !hasDevicesInList);
+            if (!hasDevicesInList && isDropdownOpen) {
+              setDropdownOpen(false);
+            }
 
             isPaused = !!s.paused;
             btnPause.disabled = !s.connected;
