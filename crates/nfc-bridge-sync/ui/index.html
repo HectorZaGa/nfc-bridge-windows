@@ -473,7 +473,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
           <div class="flex flex-col gap-gutter-xs">
             <button id="btn-toggle-usb-auto" type="button" class="w-full h-9 rounded-sm bg-dark-surface-elevated border border-dark-outline text-dark-on-surface font-label text-label-md inline-flex items-center justify-between px-gutter-md hover:border-electric-blue transition-colors">
               <span class="inline-flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-title-md text-electric-blue" aria-hidden="true">bolt</span>
+                <span id="btn-toggle-usb-auto-icon" class="material-symbols-outlined text-title-md text-electric-blue" aria-hidden="true">usb</span>
                 <span id="btn-toggle-usb-auto-label">Auto-cambio al conectar USB</span>
               </span>
               <span id="btn-toggle-usb-auto-state" class="font-mono text-[10px] text-led-green">Activado</span>
@@ -1060,6 +1060,9 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             document.getElementById('usb-title-state').textContent = transportToggleState.usb_enabled ? 'USB AOA nativo activo' : 'Escucha USB AOA desactivada';
             document.getElementById('btn-toggle-usb-auto-state').textContent = transportToggleState.usb_auto_connect ? 'Activado' : 'Desactivado';
             document.getElementById('btn-toggle-usb-auto-state').className = 'font-mono text-[10px] ' + (transportToggleState.usb_auto_connect ? 'text-led-green' : 'text-dark-on-surface-muted');
+            const usbAutoIcon = document.getElementById('btn-toggle-usb-auto-icon');
+            usbAutoIcon.textContent = transportToggleState.usb_auto_connect ? 'usb' : 'usb_off';
+            usbAutoIcon.className = 'material-symbols-outlined text-title-md ' + (transportToggleState.usb_auto_connect ? 'text-electric-blue' : 'text-dark-on-surface-muted');
             const usbListenBtn = document.getElementById('btn-toggle-usb-listen');
             const usbListenLabel = document.getElementById('btn-toggle-usb-listen-label');
             if (transportToggleState.usb_enabled) {
