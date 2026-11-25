@@ -10,7 +10,7 @@
 #>
 
 param(
-    [string]$Version = "1.1.0",
+    [string]$Version = "",
     [switch]$SkipArm64 = $false,
     [switch]$SkipX86 = $false
 )
@@ -20,8 +20,23 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $WindowsRepoDir = Resolve-Path (Join-Path $ScriptDir "..")
 $DistDir = Join-Path $WindowsRepoDir "dist"
 
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $cargoRaw = Get-Content (Join-Path $WindowsRepoDir "Cargo.toml") -Raw -Encoding UTF8
+    if ($cargoRaw -match '(?m)^version\s*=\s*"([^"]+)"') {
+        $Version = $Matches[1]
+    } else {
+        $Version = "0.1.1"
+    }
+}
+
+$gitSha = try { (git -C $WindowsRepoDir rev-parse --short HEAD 2>$null).Trim() } catch { "nogit" }
+$gitRev = try { (git -C $WindowsRepoDir rev-list --count HEAD 2>$null).Trim() } catch { "0" }
+if (-not $env:NFC_BRIDGE_BUILD_ID) {
+    $env:NFC_BRIDGE_BUILD_ID = "w$gitRev-$gitSha-$(Get-Date -Format 'yyMMddHHmmss')"
+}
+
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "    NFC BRIDGE WINDOWS - BUILD MULTI-ARQUITECTURA v$Version" -ForegroundColor Cyan
+Write-Host "    NFC BRIDGE WINDOWS - BUILD v$Version ($($env:NFC_BRIDGE_BUILD_ID))" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "Repositorio Windows: $WindowsRepoDir"
 Write-Host "Directorio de Salida: $DistDir"

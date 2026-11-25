@@ -23,7 +23,11 @@ async fn main() -> Result<()> {
         .unwrap_or(false);
 
     println!("==================================================");
-    println!("          NFC Bridge Tools - Windows Pro          ");
+    println!(
+        "   NFC Bridge Tools - Windows Pro v{} ({})",
+        env!("CARGO_PKG_VERSION"),
+        env!("NFC_BRIDGE_BUILD_ID")
+    );
     if is_portable {
         println!("             [ MODO PORTABLE ACTIVO ]             ");
     }

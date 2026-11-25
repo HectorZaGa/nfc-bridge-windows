@@ -24,7 +24,11 @@ async fn main() -> Result<()> {
     let local_ip = get_local_ip().unwrap_or_else(|| "127.0.0.1".to_string());
 
     println!("==================================================");
-    println!("          NFC Bridge Sync - Windows Lite          ");
+    println!(
+        "   NFC Bridge Sync - Windows Lite v{} ({})",
+        env!("CARGO_PKG_VERSION"),
+        env!("NFC_BRIDGE_BUILD_ID")
+    );
     if config.is_portable {
         println!("             [ MODO PORTABLE ACTIVO ]             ");
     }

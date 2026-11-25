@@ -65,6 +65,10 @@ pub enum IpcEvent {
         wfd_ssid: Option<String>,
         wfd_passphrase: Option<String>,
         wfd_ip: Option<String>,
+        #[serde(default)]
+        driver_version: Option<String>,
+        #[serde(default)]
+        driver_build_id: Option<String>,
     },
     PairingTokenIssued {
         method: String,
@@ -116,6 +120,8 @@ pub struct TransportSnapshotData {
     pub wfd_ssid: Option<String>,
     pub wfd_passphrase: Option<String>,
     pub wfd_ip: Option<String>,
+    pub driver_version: Option<String>,
+    pub driver_build_id: Option<String>,
 }
 
 impl Default for TransportSnapshotData {
@@ -134,12 +140,16 @@ impl Default for TransportSnapshotData {
             wfd_ssid: None,
             wfd_passphrase: None,
             wfd_ip: None,
+            driver_version: None,
+            driver_build_id: None,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Default)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DesktopLiveState {
+    pub sync_version: String,
+    pub sync_build_id: String,
     pub driver_online: bool,
     pub connected: bool,
     pub device_name: Option<String>,
@@ -149,6 +159,24 @@ pub struct DesktopLiveState {
     pub tag_present: bool,
     pub tag_uid: Option<String>,
     pub snapshot: TransportSnapshotData,
+}
+
+impl Default for DesktopLiveState {
+    fn default() -> Self {
+        Self {
+            sync_version: env!("CARGO_PKG_VERSION").to_string(),
+            sync_build_id: env!("NFC_BRIDGE_BUILD_ID").to_string(),
+            driver_online: false,
+            connected: false,
+            device_name: None,
+            endpoint: None,
+            latency_ms: 0,
+            paused: false,
+            tag_present: false,
+            tag_uid: None,
+            snapshot: TransportSnapshotData::default(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -375,6 +403,8 @@ impl DriverIpcClient {
                 wfd_ssid,
                 wfd_passphrase,
                 wfd_ip,
+                driver_version,
+                driver_build_id,
             } => {
                 let mut st = self.state.write().await;
                 st.snapshot = TransportSnapshotData {
@@ -391,6 +421,8 @@ impl DriverIpcClient {
                     wfd_ssid,
                     wfd_passphrase,
                     wfd_ip,
+                    driver_version,
+                    driver_build_id,
                 };
             }
             IpcEvent::PairingTokenIssued {

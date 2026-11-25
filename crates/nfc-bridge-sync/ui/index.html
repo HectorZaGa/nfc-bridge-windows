@@ -122,6 +122,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         </div>
         <span class="font-headline text-title-md text-dark-on-surface tracking-tight" data-design-text-token="title-md">NFC Bridge Lite</span>
         <span id="pc-name-badge" class="px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface-muted" data-design-text-token="label-md">PC Windows</span>
+        <span id="build-version-badge" title="Versión y Build ID" class="px-gutter-sm py-0.5 rounded-full bg-dark-surface-elevated/60 border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">v0.1.1</span>
       </div>
 
       <div class="flex items-center gap-1">
@@ -675,6 +676,14 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
             if (!s || !s.snapshot) return;
             const snap = s.snapshot;
             pcNameBadge.textContent = snap.pc_name || 'PC Windows';
+            const verBadge = document.getElementById('build-version-badge');
+            if (verBadge && s.sync_version) {
+              verBadge.textContent = 'v' + s.sync_version + ' · ' + (s.sync_build_id || '');
+              const drvInfo = snap.driver_version
+                ? ('Driver v' + snap.driver_version + ' (' + (snap.driver_build_id || '') + ')')
+                : 'Driver sin ID';
+              verBadge.title = 'Sync v' + s.sync_version + ' (' + (s.sync_build_id || '') + ') | ' + drvInfo;
+            }
 
             if (document.activeElement !== relayInput && snap.relay_url && !relayInput.value) {
               relayInput.value = snap.relay_url;
