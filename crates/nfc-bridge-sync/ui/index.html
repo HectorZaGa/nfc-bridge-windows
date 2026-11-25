@@ -10,32 +10,32 @@ globalThis.tailwind.config = {
   theme: {
     extend: {
       colors: {
-        'electric-blue': '#3B82F6',
-        'on-electric-blue': '#FFFFFF',
-        'electric-blue-soft': '#16243D',
-        'on-electric-blue-soft': '#ADC6FF',
-        'electric-blue-border': '#2573E6',
+        'electric-blue': 'rgb(var(--nb-accent-rgb) / <alpha-value>)',
+        'on-electric-blue': 'var(--nb-on-accent)',
+        'electric-blue-soft': 'var(--nb-accent-soft)',
+        'on-electric-blue-soft': 'var(--nb-accent-on-soft)',
+        'electric-blue-border': 'var(--nb-accent-border)',
         'led-green': '#22C55E',
         'amber-pause': '#F59E0B',
         'on-amber-pause': '#2A1700',
-        'amber-pause-soft': '#2A1F0A',
-        'on-amber-pause-soft': '#FFB95F',
-        'red-disconnect': '#FF8982',
-        'red-disconnect-border': '#7F2929',
-        'red-disconnect-soft': '#241414',
+        'amber-pause-soft': 'var(--nb-amber-soft)',
+        'on-amber-pause-soft': 'var(--nb-on-amber-soft)',
+        'red-disconnect': 'var(--nb-red)',
+        'red-disconnect-border': 'var(--nb-red-border)',
+        'red-disconnect-soft': 'var(--nb-red-soft)',
         'oled-black': '#000000',
         'oled-surface': '#0A0A0A',
         'oled-outline': '#1F1F1F',
         'oled-dim': '#787776',
-        'dark-surface': '#121212',
-        'dark-on-surface': '#F3F0EF',
-        'dark-on-surface-muted': '#ADABAA',
-        'dark-surface-card': '#1E1E1E',
-        'dark-on-surface-card': '#F3F0EF',
-        'dark-surface-elevated': '#262626',
-        'dark-on-surface-elevated': '#E5E2E1',
-        'dark-outline': '#313030',
-        'dark-outline-variant': '#474646',
+        'dark-surface': 'var(--nb-surface)',
+        'dark-on-surface': 'var(--nb-on-surface)',
+        'dark-on-surface-muted': 'var(--nb-on-surface-muted)',
+        'dark-surface-card': 'var(--nb-surface-card)',
+        'dark-on-surface-card': 'var(--nb-on-surface)',
+        'dark-surface-elevated': 'var(--nb-surface-elevated)',
+        'dark-on-surface-elevated': 'var(--nb-on-surface-elevated)',
+        'dark-outline': 'var(--nb-outline)',
+        'dark-outline-variant': 'var(--nb-outline-variant)',
       },
       borderRadius: {
         'sm': '8px',
@@ -91,6 +91,42 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&amp;family=Spline+Sans+Mono:wght@400;500&amp;family=Wix+Madefor+Display:wght@500;600;700&amp;display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet">
   <style>
+    :root, html.dark {
+      --nb-surface: #121212;
+      --nb-surface-card: #1E1E1E;
+      --nb-surface-elevated: #262626;
+      --nb-on-surface: #F3F0EF;
+      --nb-on-surface-elevated: #E5E2E1;
+      --nb-on-surface-muted: #ADABAA;
+      --nb-outline: #313030;
+      --nb-outline-variant: #474646;
+      --nb-accent-rgb: 59 130 246;
+      --nb-on-accent: #FFFFFF;
+      --nb-accent-soft: rgba(59, 130, 246, 0.16);
+      --nb-accent-on-soft: #ADC6FF;
+      --nb-accent-border: rgba(59, 130, 246, 0.45);
+      --nb-amber-soft: #2A1F0A;
+      --nb-on-amber-soft: #FFB95F;
+      --nb-red: #FF8982;
+      --nb-red-border: #7F2929;
+      --nb-red-soft: #241414;
+    }
+    html.light {
+      --nb-surface: #F5F6F8;
+      --nb-surface-card: #FFFFFF;
+      --nb-surface-elevated: #ECEEF2;
+      --nb-on-surface: #14161A;
+      --nb-on-surface-elevated: #1E2228;
+      --nb-on-surface-muted: #5B6270;
+      --nb-outline: #D9DEE7;
+      --nb-outline-variant: #C2C8D4;
+      --nb-on-accent: #FFFFFF;
+      --nb-amber-soft: #FEF3C7;
+      --nb-on-amber-soft: #92400E;
+      --nb-red: #DC2626;
+      --nb-red-border: #FCA5A5;
+      --nb-red-soft: #FEE2E2;
+    }
     .material-symbols-outlined, .material-symbols-rounded, .material-symbols-sharp, .material-icons {
       display: inline-block;
       width: 1em;
@@ -133,7 +169,7 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       </div>
 
       <div class="flex items-center gap-1">
-        <button type="button" title="Configuración" aria-label="Configuración" class="w-8 h-8 rounded-sm inline-flex items-center justify-center text-dark-on-surface-muted transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated hover:text-dark-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
+        <button id="btn-open-settings" type="button" title="Opciones" aria-label="Opciones" class="w-8 h-8 rounded-sm inline-flex items-center justify-center text-dark-on-surface-muted transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated hover:text-dark-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
           <span class="material-symbols-outlined text-title-lg" aria-hidden="true">settings</span>
         </button>
         <button type="button" title="Minimizar a la bandeja del sistema" aria-label="Minimizar a la bandeja del sistema" class="w-8 h-8 rounded-sm inline-flex items-center justify-center text-dark-on-surface-muted transition-colors duration-state-change ease-state-change hover:bg-dark-surface-elevated hover:text-dark-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue">
@@ -527,6 +563,137 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
       </aside>
 
     </main>
+  </div>
+
+  <!-- MODAL DE OPCIONES DE SYNC (Apariencia, Red Local TCP y Confirmación desde Android) -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="w-full max-w-[480px] bg-dark-surface-card border border-dark-outline rounded-md shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-gutter-lg py-gutter-md border-b border-dark-outline flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-electric-blue text-title-lg" aria-hidden="true">tune</span>
+          <h2 id="settings-modal-title" class="font-headline text-title-md text-dark-on-surface">Opciones de Sync</h2>
+        </div>
+        <button id="btn-close-settings" type="button" title="Cerrar" aria-label="Cerrar opciones" class="w-8 h-8 rounded-sm inline-flex items-center justify-center text-dark-on-surface-muted hover:bg-dark-surface-elevated hover:text-dark-on-surface">
+          <span class="material-symbols-outlined text-title-md" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+      <div class="p-gutter-lg flex flex-col gap-gutter-lg max-h-[75vh] overflow-y-auto">
+        <!-- 1. Apariencia -->
+        <section class="flex flex-col gap-gutter-sm">
+          <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Apariencia</span>
+
+          <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-label text-label-lg text-dark-on-surface">Tema</span>
+              <div class="inline-flex rounded-sm bg-dark-surface border border-dark-outline p-0.5 gap-0.5">
+                <button type="button" data-theme-choice="dark" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Oscuro</button>
+                <button type="button" data-theme-choice="light" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Claro</button>
+                <button type="button" data-theme-choice="system" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Sistema</button>
+              </div>
+            </div>
+
+            <div class="h-px bg-dark-outline"></div>
+
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex flex-col">
+                <span class="font-label text-label-lg text-dark-on-surface">Color de acento de Windows</span>
+                <span class="font-body text-[11px] text-dark-on-surface-muted">Usa automáticamente el acento del sistema</span>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span id="settings-win-accent-chip" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">
+                  <span id="settings-win-accent-dot" class="w-2.5 h-2.5 rounded-full bg-[#3B82F6]"></span>
+                  <span id="settings-win-accent-hex">#3B82F6</span>
+                </span>
+                <button id="btn-toggle-win-accent" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] transition-colors">Desactivado</button>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-label text-label-md text-dark-on-surface-muted">Color personalizado</span>
+              <div class="flex items-center gap-1.5">
+                <button type="button" data-accent-preset="#3B82F6" title="Azul" class="accent-preset-btn w-5 h-5 rounded-full bg-[#3B82F6] border border-white/30"></button>
+                <button type="button" data-accent-preset="#06B6D4" title="Cian" class="accent-preset-btn w-5 h-5 rounded-full bg-[#06B6D4] border border-white/30"></button>
+                <button type="button" data-accent-preset="#10B981" title="Esmeralda" class="accent-preset-btn w-5 h-5 rounded-full bg-[#10B981] border border-white/30"></button>
+                <button type="button" data-accent-preset="#8B5CF6" title="Violeta" class="accent-preset-btn w-5 h-5 rounded-full bg-[#8B5CF6] border border-white/30"></button>
+                <button type="button" data-accent-preset="#EC4899" title="Magenta" class="accent-preset-btn w-5 h-5 rounded-full bg-[#EC4899] border border-white/30"></button>
+                <button type="button" data-accent-preset="#F59E0B" title="Ámbar" class="accent-preset-btn w-5 h-5 rounded-full bg-[#F59E0B] border border-white/30"></button>
+                <label class="inline-flex items-center gap-1 ml-1 cursor-pointer bg-dark-surface border border-dark-outline rounded-sm px-1.5 py-0.5">
+                  <input id="settings-custom-color" type="color" value="#3B82F6" class="w-4 h-4 bg-transparent border-0 p-0 cursor-pointer">
+                  <span id="settings-custom-hex" class="font-mono text-[10px] text-dark-on-surface">#3B82F6</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Red Local TCP y Cambios desde Android -->
+        <section class="flex flex-col gap-gutter-sm">
+          <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Conexión y Red Local</span>
+
+          <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex flex-col">
+                <span class="font-label text-label-lg text-dark-on-surface">Aceptar cambios desde Android automáticamente</span>
+                <span class="font-body text-[11px] text-dark-on-surface-muted">Si está desactivado, Sync pedirá confirmación al cambiar de dispositivo desde el celular</span>
+              </div>
+              <button id="btn-toggle-auto-mobile-switch" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Desactivado</button>
+            </div>
+
+            <div class="h-px bg-dark-outline"></div>
+
+            <div class="grid grid-cols-[1.4fr_0.9fr] gap-gutter-sm">
+              <label class="flex flex-col gap-1">
+                <span class="font-label text-[11px] text-dark-on-surface-muted">IP manual (vacío = automática)</span>
+                <input id="settings-tcp-ip" type="text" placeholder="Ej. 192.168.15.3" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="font-label text-[11px] text-dark-on-surface-muted">Puerto TCP</span>
+                <input id="settings-tcp-port" type="number" min="1024" max="65535" value="45362" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
+              </label>
+            </div>
+
+            <div class="flex items-center justify-between gap-2">
+              <span id="settings-net-feedback" class="font-label text-[11px] text-dark-on-surface-muted"></span>
+              <div class="flex items-center gap-2 shrink-0">
+                <button id="btn-reset-tcp-net" type="button" class="h-8 px-3 rounded-sm bg-dark-surface border border-dark-outline font-label text-[11px] text-dark-on-surface-muted hover:text-dark-on-surface hover:border-electric-blue transition-colors">Restablecer por defecto</button>
+                <button id="btn-save-tcp-net" type="button" class="h-8 px-3 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] hover:opacity-95 transition-opacity">Guardar red</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIRMACIÓN CUANDO ANDROID SOLICITA CAMBIAR EL DISPOSITIVO EN SYNC -->
+  <div id="mobile-switch-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div class="w-full max-w-[380px] bg-dark-surface-card border border-dark-outline rounded-md shadow-2xl p-gutter-lg flex flex-col gap-gutter-md">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-electric-blue text-title-lg" aria-hidden="true">swap_horiz</span>
+        <h3 class="font-headline text-title-md text-dark-on-surface">Cambio solicitado desde móvil</h3>
+      </div>
+      <p id="mobile-switch-desc" class="font-body text-body-md text-dark-on-surface-muted"></p>
+      <div class="flex items-center justify-end gap-2">
+        <button id="btn-reject-mobile-switch" type="button" class="h-9 px-3 rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline">Rechazar</button>
+        <button id="btn-accept-mobile-switch" type="button" class="h-9 px-3 rounded-sm bg-electric-blue text-on-electric-blue font-label text-label-md hover:opacity-95">Aceptar cambio</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CUANDO EL EMPAREJAMIENTO ES INVÁLIDO POR PERFIL ELIMINADO -->
+  <div id="invalid-pairing-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div class="w-full max-w-[400px] bg-dark-surface-card border border-dark-outline rounded-md shadow-2xl p-gutter-lg flex flex-col gap-gutter-md">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-red-disconnect text-title-lg" aria-hidden="true">link_off</span>
+        <h3 class="font-headline text-title-md text-dark-on-surface">Emparejamiento inválido</h3>
+      </div>
+      <p id="invalid-pairing-desc" class="font-body text-body-md text-dark-on-surface-muted"></p>
+      <div class="flex items-center justify-end gap-2">
+        <button id="btn-keep-invalid-profile" type="button" class="h-9 px-3 rounded-sm bg-dark-surface-elevated border border-dark-outline font-label text-label-md text-dark-on-surface hover:bg-dark-outline">Mantener</button>
+        <button id="btn-delete-invalid-profile" type="button" class="h-9 px-3 rounded-sm bg-red-disconnect-soft border border-red-disconnect-border text-red-disconnect font-label text-label-md hover:opacity-95">Eliminar perfil</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1396,12 +1563,294 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               btnPauseIcon.className = 'material-symbols-outlined text-title-md text-dark-on-surface-muted';
               btnPauseLabel.textContent = 'Pausar';
             }
+
+            if (s.ui_settings) {
+              uiSettingsState = Object.assign({}, uiSettingsState, s.ui_settings);
+            }
+            if (s.windows_accent_hex) {
+              windowsAccentHex = s.windows_accent_hex;
+            }
+            applyThemeAndAccent();
+
+            const autoSwBtn = document.getElementById('btn-toggle-auto-mobile-switch');
+            const autoSwOn = !!snap.auto_accept_mobile_switch;
+            autoAcceptMobileSwitchState = autoSwOn;
+            if (autoSwBtn) {
+              autoSwBtn.textContent = autoSwOn ? 'Activado' : 'Desactivado';
+              autoSwBtn.setAttribute('aria-checked', autoSwOn ? 'true' : 'false');
+              autoSwBtn.className = autoSwOn
+                ? 'h-7 px-2.5 rounded-sm bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft font-label text-[11px] shrink-0 transition-colors'
+                : 'h-7 px-2.5 rounded-sm bg-dark-surface border border-dark-outline text-dark-on-surface-muted font-label text-[11px] shrink-0 transition-colors';
+            }
+
+            const ipInput = document.getElementById('settings-tcp-ip');
+            const portInput = document.getElementById('settings-tcp-port');
+            if (ipInput && document.activeElement !== ipInput && settingsModal.classList.contains('hidden')) {
+              ipInput.value = snap.tcp_ip_override || '';
+            }
+            if (portInput && document.activeElement !== portInput && settingsModal.classList.contains('hidden')) {
+              portInput.value = String(snap.tcp_port || 45362);
+            }
+
+            const mobileSwModal = document.getElementById('mobile-switch-modal');
+            if (s.pending_mobile_switch) {
+              currentPendingSwitchId = s.pending_mobile_switch.request_id;
+              const swTr = getTransportMeta(s.pending_mobile_switch.transport, '').label;
+              document.getElementById('mobile-switch-desc').textContent =
+                '«' + s.pending_mobile_switch.device_name + '» (' + swTr + ') solicita cambiar el dispositivo activo en Sync. ¿Deseas aceptar el cambio?';
+              mobileSwModal.classList.remove('hidden');
+            } else {
+              currentPendingSwitchId = null;
+              mobileSwModal.classList.add('hidden');
+            }
+
+            const invalidModal = document.getElementById('invalid-pairing-modal');
+            if (s.pending_invalid_pairing) {
+              currentInvalidDeviceId = s.pending_invalid_pairing.device_id || null;
+              document.getElementById('invalid-pairing-desc').textContent =
+                'El perfil «' + s.pending_invalid_pairing.device_name + '» fue eliminado desde Android o sus credenciales únicas ya no coinciden, por lo que no se podrá reconectar. ¿Deseas eliminarlo también de Sync?';
+              invalidModal.classList.remove('hidden');
+            } else {
+              currentInvalidDeviceId = null;
+              invalidModal.classList.add('hidden');
+            }
           })
           .catch(function () {});
       }
 
+      let uiSettingsState = {
+        theme_mode: 'dark',
+        use_windows_accent: false,
+        custom_accent_hex: '#3B82F6'
+      };
+      let windowsAccentHex = '#3B82F6';
+      let autoAcceptMobileSwitchState = false;
+      let currentPendingSwitchId = null;
+      let currentInvalidDeviceId = null;
+      const settingsModal = document.getElementById('settings-modal');
+
+      function parseHexRgb(hex) {
+        const clean = (hex || '#3B82F6').replace('#', '');
+        if (!/^[0-9a-fA-F]{6}$/.test(clean)) return [59, 130, 246];
+        return [
+          parseInt(clean.slice(0, 2), 16),
+          parseInt(clean.slice(2, 4), 16),
+          parseInt(clean.slice(4, 6), 16)
+        ];
+      }
+
+      function applyThemeAndAccent() {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const resolvedDark = uiSettingsState.theme_mode === 'dark' ||
+          (uiSettingsState.theme_mode === 'system' && prefersDark);
+        const root = document.documentElement;
+        root.classList.toggle('dark', resolvedDark);
+        root.classList.toggle('light', !resolvedDark);
+
+        const activeHex = uiSettingsState.use_windows_accent
+          ? (windowsAccentHex || '#3B82F6')
+          : (uiSettingsState.custom_accent_hex || '#3B82F6');
+        const rgb = parseHexRgb(activeHex);
+        const r = rgb[0], g = rgb[1], b = rgb[2];
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+        root.style.setProperty('--nb-accent-rgb', r + ' ' + g + ' ' + b);
+        root.style.setProperty('--nb-on-accent', lum > 0.62 ? '#111827' : '#FFFFFF');
+        root.style.setProperty('--nb-accent-soft', 'rgba(' + r + ',' + g + ',' + b + ',' + (resolvedDark ? '0.18' : '0.12') + ')');
+        root.style.setProperty('--nb-accent-border', 'rgba(' + r + ',' + g + ',' + b + ',' + (resolvedDark ? '0.50' : '0.42') + ')');
+        root.style.setProperty(
+          '--nb-accent-on-soft',
+          resolvedDark
+            ? 'rgb(' + Math.min(255, Math.round(r + (255 - r) * 0.45)) + ',' + Math.min(255, Math.round(g + (255 - g) * 0.45)) + ',' + Math.min(255, Math.round(b + (255 - b) * 0.45)) + ')'
+            : 'rgb(' + Math.round(r * 0.72) + ',' + Math.round(g * 0.72) + ',' + Math.round(b * 0.72) + ')'
+        );
+
+        document.querySelectorAll('.theme-choice-btn').forEach(function (btn) {
+          const active = btn.getAttribute('data-theme-choice') === uiSettingsState.theme_mode;
+          btn.className = active
+            ? 'theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] bg-electric-blue text-on-electric-blue transition-colors'
+            : 'theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] text-dark-on-surface-muted hover:text-dark-on-surface transition-colors';
+        });
+
+        const winDot = document.getElementById('settings-win-accent-dot');
+        const winHexLbl = document.getElementById('settings-win-accent-hex');
+        const winBtn = document.getElementById('btn-toggle-win-accent');
+        if (winDot) winDot.style.backgroundColor = windowsAccentHex;
+        if (winHexLbl) winHexLbl.textContent = windowsAccentHex;
+        if (winBtn) {
+          const on = !!uiSettingsState.use_windows_accent;
+          winBtn.textContent = on ? 'Activado' : 'Desactivado';
+          winBtn.setAttribute('aria-checked', on ? 'true' : 'false');
+          winBtn.className = on
+            ? 'h-7 px-2.5 rounded-sm bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft font-label text-[11px] transition-colors'
+            : 'h-7 px-2.5 rounded-sm bg-dark-surface border border-dark-outline text-dark-on-surface-muted font-label text-[11px] transition-colors';
+        }
+        const customInput = document.getElementById('settings-custom-color');
+        const customHex = document.getElementById('settings-custom-hex');
+        if (customInput && document.activeElement !== customInput) {
+          customInput.value = uiSettingsState.custom_accent_hex || '#3B82F6';
+        }
+        if (customHex) customHex.textContent = (uiSettingsState.custom_accent_hex || '#3B82F6').toUpperCase();
+      }
+
+      function persistUiSettings() {
+        applyThemeAndAccent();
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'save_ui_settings',
+            theme_mode: uiSettingsState.theme_mode,
+            use_windows_accent: uiSettingsState.use_windows_accent,
+            custom_accent_hex: uiSettingsState.custom_accent_hex
+          })
+        }).catch(function () {});
+      }
+
+      document.getElementById('btn-open-settings').addEventListener('click', function () {
+        settingsModal.classList.remove('hidden');
+        refreshState();
+      });
+      document.getElementById('btn-close-settings').addEventListener('click', function () {
+        settingsModal.classList.add('hidden');
+      });
+      settingsModal.addEventListener('click', function (ev) {
+        if (ev.target === settingsModal) settingsModal.classList.add('hidden');
+      });
+
+      document.querySelectorAll('.theme-choice-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          uiSettingsState.theme_mode = btn.getAttribute('data-theme-choice');
+          persistUiSettings();
+        });
+      });
+
+      document.getElementById('btn-toggle-win-accent').addEventListener('click', function () {
+        uiSettingsState.use_windows_accent = !uiSettingsState.use_windows_accent;
+        persistUiSettings();
+      });
+
+      document.querySelectorAll('.accent-preset-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          uiSettingsState.use_windows_accent = false;
+          uiSettingsState.custom_accent_hex = btn.getAttribute('data-accent-preset');
+          persistUiSettings();
+        });
+      });
+
+      document.getElementById('settings-custom-color').addEventListener('input', function (ev) {
+        uiSettingsState.use_windows_accent = false;
+        uiSettingsState.custom_accent_hex = ev.target.value.toUpperCase();
+        persistUiSettings();
+      });
+
+      document.getElementById('btn-toggle-auto-mobile-switch').addEventListener('click', function () {
+        autoAcceptMobileSwitchState = !autoAcceptMobileSwitchState;
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'set_auto_accept_mobile_switch',
+            enabled: autoAcceptMobileSwitchState
+          })
+        }).then(refreshState).catch(function () {});
+      });
+
+      document.getElementById('btn-save-tcp-net').addEventListener('click', function () {
+        const ipVal = document.getElementById('settings-tcp-ip').value.trim();
+        const portVal = parseInt(document.getElementById('settings-tcp-port').value, 10);
+        const fb = document.getElementById('settings-net-feedback');
+        if (!portVal || portVal < 1024 || portVal > 65535) {
+          fb.textContent = 'Puerto inválido (1024 - 65535)';
+          return;
+        }
+        fb.textContent = 'Aplicando...';
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'set_tcp_network',
+            tcp_ip: ipVal || null,
+            tcp_port: portVal,
+            reset: false
+          })
+        }).then(function () {
+          fb.textContent = 'Configuración de red guardada.';
+          refreshState();
+        }).catch(function () {
+          fb.textContent = 'Error aplicando configuración.';
+        });
+      });
+
+      document.getElementById('btn-reset-tcp-net').addEventListener('click', function () {
+        const fb = document.getElementById('settings-net-feedback');
+        document.getElementById('settings-tcp-ip').value = '';
+        document.getElementById('settings-tcp-port').value = '45362';
+        fb.textContent = 'Restableciendo...';
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'set_tcp_network',
+            reset: true
+          })
+        }).then(function () {
+          fb.textContent = 'Restablecido por defecto (LAN auto / 45362).';
+          refreshState();
+        }).catch(function () {
+          fb.textContent = 'Error restableciendo.';
+        });
+      });
+
+      document.getElementById('btn-accept-mobile-switch').addEventListener('click', function () {
+        if (!currentPendingSwitchId) return;
+        const reqId = currentPendingSwitchId;
+        document.getElementById('mobile-switch-modal').classList.add('hidden');
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'respond_mobile_switch', request_id: reqId, accept: true })
+        }).then(refreshState).catch(function () {});
+      });
+
+      document.getElementById('btn-reject-mobile-switch').addEventListener('click', function () {
+        if (!currentPendingSwitchId) return;
+        const reqId = currentPendingSwitchId;
+        document.getElementById('mobile-switch-modal').classList.add('hidden');
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'respond_mobile_switch', request_id: reqId, accept: false })
+        }).then(refreshState).catch(function () {});
+      });
+
+      document.getElementById('btn-delete-invalid-profile').addEventListener('click', function () {
+        const devId = currentInvalidDeviceId;
+        document.getElementById('invalid-pairing-modal').classList.add('hidden');
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'dismiss_invalid_pairing', device_id: devId, delete_profile: true })
+        }).then(refreshState).catch(function () {});
+      });
+
+      document.getElementById('btn-keep-invalid-profile').addEventListener('click', function () {
+        document.getElementById('invalid-pairing-modal').classList.add('hidden');
+        fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'dismiss_invalid_pairing', delete_profile: false })
+        }).then(refreshState).catch(function () {});
+      });
+
+      if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+          if (uiSettingsState.theme_mode === 'system') applyThemeAndAccent();
+        });
+      }
+
       refreshState();
-      setInterval(refreshState, 1500);
+      setInterval(refreshState, 1200);
     })();
   </script>
 

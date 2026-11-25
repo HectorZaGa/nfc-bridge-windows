@@ -54,6 +54,13 @@ pub enum IpcCommand {
     RevokeTrustedDevice { device_id: String },
     RenameTrustedDevice { device_id: String, name: String },
     SelectTrustedDevice { device_id: String },
+    SetTcpNetworkConfig {
+        tcp_ip: Option<String>,
+        tcp_port: Option<u16>,
+        reset: bool,
+    },
+    SetAutoAcceptMobileSwitch { enabled: bool },
+    RespondMobileSwitch { request_id: String, accept: bool },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -116,7 +123,29 @@ pub enum IpcEvent {
         #[serde(default)]
         driver_build_id: Option<String>,
         #[serde(default)]
+        tcp_ip_override: Option<String>,
+        #[serde(default)]
+        auto_accept_mobile_switch: bool,
+        #[serde(default)]
         trusted_devices: Vec<TrustedDeviceInfo>,
+    },
+    PendingMobileSwitch {
+        request_id: String,
+        device_id: Option<String>,
+        device_name: String,
+        mobile_id: Option<String>,
+        device_os: Option<String>,
+        transport: String,
+    },
+    PendingMobileSwitchCleared {
+        request_id: String,
+    },
+    PairingInvalidNotice {
+        device_id: Option<String>,
+        device_name: String,
+        mobile_id: Option<String>,
+        transport: Option<String>,
+        reason: String,
     },
     PairingTokenIssued {
         method: String,
@@ -176,7 +205,45 @@ pub struct TransportSnapshotData {
     pub usb_connected: bool,
     pub driver_version: Option<String>,
     pub driver_build_id: Option<String>,
+    pub tcp_ip_override: Option<String>,
+    pub auto_accept_mobile_switch: bool,
     pub trusted_devices: Vec<TrustedDeviceInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncUiSettings {
+    pub theme_mode: String,
+    pub use_windows_accent: bool,
+    pub custom_accent_hex: String,
+}
+
+impl Default for SyncUiSettings {
+    fn default() -> Self {
+        Self {
+            theme_mode: "dark".to_string(),
+            use_windows_accent: false,
+            custom_accent_hex: "#3B82F6".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingMobileSwitchState {
+    pub request_id: String,
+    pub device_id: Option<String>,
+    pub device_name: String,
+    pub mobile_id: Option<String>,
+    pub device_os: Option<String>,
+    pub transport: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct InvalidPairingNoticeState {
+    pub device_id: Option<String>,
+    pub device_name: String,
+    pub mobile_id: Option<String>,
+    pub transport: Option<String>,
+    pub reason: String,
 }
 
 impl Default for TransportSnapshotData {
@@ -203,6 +270,8 @@ impl Default for TransportSnapshotData {
             usb_connected: false,
             driver_version: None,
             driver_build_id: None,
+            tcp_ip_override: None,
+            auto_accept_mobile_switch: false,
             trusted_devices: Vec::new(),
         }
     }
@@ -230,6 +299,10 @@ pub struct DesktopLiveState {
     pub paused: bool,
     pub tag_present: bool,
     pub tag_uid: Option<String>,
+    pub ui_settings: SyncUiSettings,
+    pub windows_accent_hex: String,
+    pub pending_mobile_switch: Option<PendingMobileSwitchState>,
+    pub pending_invalid_pairing: Option<InvalidPairingNoticeState>,
     pub snapshot: TransportSnapshotData,
 }
 
@@ -256,6 +329,10 @@ impl Default for DesktopLiveState {
             paused: false,
             tag_present: false,
             tag_uid: None,
+            ui_settings: load_ui_settings(),
+            windows_accent_hex: read_windows_accent_hex(),
+            pending_mobile_switch: None,
+            pending_invalid_pairing: None,
             snapshot: TransportSnapshotData::default(),
         }
     }
@@ -278,7 +355,41 @@ impl DriverIpcClient {
     }
 
     pub async fn get_live_state(&self) -> DesktopLiveState {
-        self.state.read().await.clone()
+        let accent = read_windows_accent_hex();
+        let mut st = self.state.write().await;
+        st.windows_accent_hex = accent;
+        st.clone()
+    }
+
+    pub async fn update_ui_settings(&self, settings: SyncUiSettings) {
+        let clean = SyncUiSettings {
+            theme_mode: match settings.theme_mode.as_str() {
+                "light" | "system" | "dark" => settings.theme_mode,
+                _ => "dark".to_string(),
+            },
+            use_windows_accent: settings.use_windows_accent,
+            custom_accent_hex: normalize_hex_color(&settings.custom_accent_hex),
+        };
+        save_ui_settings(&clean);
+        let mut st = self.state.write().await;
+        st.ui_settings = clean;
+    }
+
+    pub async fn clear_pending_mobile_switch(&self, request_id: Option<&str>) {
+        let mut st = self.state.write().await;
+        if request_id.is_none()
+            || st
+                .pending_mobile_switch
+                .as_ref()
+                .is_some_and(|p| Some(p.request_id.as_str()) == request_id)
+        {
+            st.pending_mobile_switch = None;
+        }
+    }
+
+    pub async fn clear_invalid_pairing_notice(&self) {
+        let mut st = self.state.write().await;
+        st.pending_invalid_pairing = None;
     }
 
     pub async fn select_saved_profile(&self, device_id: &str) {
@@ -612,6 +723,8 @@ impl DriverIpcClient {
                 usb_connected,
                 driver_version,
                 driver_build_id,
+                tcp_ip_override,
+                auto_accept_mobile_switch,
                 trusted_devices,
             } => {
                 let mut st = self.state.write().await;
@@ -637,9 +750,55 @@ impl DriverIpcClient {
                     usb_connected,
                     driver_version,
                     driver_build_id,
+                    tcp_ip_override,
+                    auto_accept_mobile_switch,
                     trusted_devices,
                 };
                 Self::reconcile_saved_selection(&mut st, None);
+            }
+            IpcEvent::PendingMobileSwitch {
+                request_id,
+                device_id,
+                device_name,
+                mobile_id,
+                device_os,
+                transport,
+            } => {
+                let mut st = self.state.write().await;
+                st.pending_mobile_switch = Some(PendingMobileSwitchState {
+                    request_id,
+                    device_id,
+                    device_name,
+                    mobile_id,
+                    device_os,
+                    transport,
+                });
+            }
+            IpcEvent::PendingMobileSwitchCleared { request_id } => {
+                let mut st = self.state.write().await;
+                if st
+                    .pending_mobile_switch
+                    .as_ref()
+                    .is_some_and(|p| p.request_id == request_id)
+                {
+                    st.pending_mobile_switch = None;
+                }
+            }
+            IpcEvent::PairingInvalidNotice {
+                device_id,
+                device_name,
+                mobile_id,
+                transport,
+                reason,
+            } => {
+                let mut st = self.state.write().await;
+                st.pending_invalid_pairing = Some(InvalidPairingNoticeState {
+                    device_id,
+                    device_name,
+                    mobile_id,
+                    transport,
+                    reason,
+                });
             }
             IpcEvent::PairingTokenIssued {
                 method,
@@ -757,6 +916,74 @@ fn percent_encode_query(raw: &str) -> String {
         }
     }
     out
+}
+
+fn normalize_hex_color(raw: &str) -> String {
+    let trimmed = raw.trim().trim_start_matches('#');
+    if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+        format!("#{}", trimmed.to_ascii_uppercase())
+    } else {
+        "#3B82F6".to_string()
+    }
+}
+
+fn ui_settings_path() -> std::path::PathBuf {
+    let base = std::env::var("APPDATA")
+        .or_else(|_| std::env::var("LOCALAPPDATA"))
+        .unwrap_or_else(|_| ".".to_string());
+    std::path::PathBuf::from(base)
+        .join("NFC Bridge")
+        .join("sync_ui_settings.json")
+}
+
+fn load_ui_settings() -> SyncUiSettings {
+    std::fs::read_to_string(ui_settings_path())
+        .ok()
+        .and_then(|s| serde_json::from_str::<SyncUiSettings>(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_ui_settings(cfg: &SyncUiSettings) {
+    let path = ui_settings_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(cfg) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+pub fn read_windows_accent_hex() -> String {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        if let Ok(out) = std::process::Command::new("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\DWM",
+                "/v",
+                "AccentColor",
+            ])
+            .creation_flags(0x0800_0000)
+            .output()
+        {
+            if out.status.success() {
+                let text = String::from_utf8_lossy(&out.stdout);
+                if let Some(token) = text
+                    .split_whitespace()
+                    .find(|t| t.starts_with("0x") || t.starts_with("0X"))
+                {
+                    if let Ok(abgr) = u32::from_str_radix(&token[2..], 16) {
+                        let r = (abgr & 0xFF) as u8;
+                        let g = ((abgr >> 8) & 0xFF) as u8;
+                        let b = ((abgr >> 16) & 0xFF) as u8;
+                        return format!("#{:02X}{:02X}{:02X}", r, g, b);
+                    }
+                }
+            }
+        }
+    }
+    "#3B82F6".to_string()
 }
 
 #[cfg(test)]

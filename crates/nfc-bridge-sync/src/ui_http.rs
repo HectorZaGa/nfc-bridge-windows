@@ -28,6 +28,24 @@ struct CommandRequest {
     name: Option<String>,
     #[serde(default)]
     enabled: Option<bool>,
+    #[serde(default)]
+    tcp_ip: Option<String>,
+    #[serde(default)]
+    tcp_port: Option<u16>,
+    #[serde(default)]
+    reset: Option<bool>,
+    #[serde(default)]
+    request_id: Option<String>,
+    #[serde(default)]
+    accept: Option<bool>,
+    #[serde(default)]
+    delete_profile: Option<bool>,
+    #[serde(default)]
+    theme_mode: Option<String>,
+    #[serde(default)]
+    use_windows_accent: Option<bool>,
+    #[serde(default)]
+    custom_accent_hex: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -338,6 +356,81 @@ async fn handle_http_conn(mut stream: TcpStream, ipc: DriverIpcClient, port: u16
                         }
                         None => Err(anyhow::anyhow!("Falta device_id")),
                     },
+                    "save_ui_settings" => {
+                        let cur = ipc.get_live_state().await.ui_settings;
+                        let updated = crate::server::SyncUiSettings {
+                            theme_mode: req.theme_mode.unwrap_or(cur.theme_mode),
+                            use_windows_accent: req
+                                .use_windows_accent
+                                .unwrap_or(cur.use_windows_accent),
+                            custom_accent_hex: req
+                                .custom_accent_hex
+                                .unwrap_or(cur.custom_accent_hex),
+                        };
+                        ipc.update_ui_settings(updated).await;
+                        Ok(())
+                    }
+                    "set_tcp_network" => {
+                        let r = ipc
+                            .send_command(IpcCommand::SetTcpNetworkConfig {
+                                tcp_ip: req.tcp_ip,
+                                tcp_port: req.tcp_port,
+                                reset: req.reset.unwrap_or(false),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+                        }
+                        r
+                    }
+                    "set_auto_accept_mobile_switch" => {
+                        let r = ipc
+                            .send_command(IpcCommand::SetAutoAcceptMobileSwitch {
+                                enabled: req.enabled.unwrap_or(false),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+                        }
+                        r
+                    }
+                    "respond_mobile_switch" => {
+                        let req_id = req.request_id.unwrap_or_default();
+                        ipc.clear_pending_mobile_switch(Some(&req_id)).await;
+                        let r = ipc
+                            .send_command(IpcCommand::RespondMobileSwitch {
+                                request_id: req_id,
+                                accept: req.accept.unwrap_or(false),
+                            })
+                            .await;
+                        if r.is_ok() {
+                            let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                            let _ = ipc.send_command(IpcCommand::GetStatus).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+                        }
+                        r
+                    }
+                    "dismiss_invalid_pairing" => {
+                        ipc.clear_invalid_pairing_notice().await;
+                        if req.delete_profile.unwrap_or(false) {
+                            if let Some(device_id) = req.device_id.filter(|id| !id.trim().is_empty()) {
+                                ipc.remove_saved_profile(&device_id).await;
+                                let r = ipc
+                                    .send_command(IpcCommand::RevokeTrustedDevice { device_id })
+                                    .await;
+                                if r.is_ok() {
+                                    let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
+                                }
+                                r
+                            } else {
+                                Ok(())
+                            }
+                        } else {
+                            Ok(())
+                        }
+                    }
                     _ => Err(anyhow::anyhow!("Comando desconocido")),
                 };
                 match res {
