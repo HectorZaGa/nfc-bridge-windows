@@ -20,14 +20,24 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $WindowsRepoDir = Resolve-Path (Join-Path $ScriptDir "..")
 $DistDir = Join-Path $WindowsRepoDir "dist"
 
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    $cargoRaw = Get-Content (Join-Path $WindowsRepoDir "Cargo.toml") -Raw -Encoding UTF8
-    if ($cargoRaw -match '(?m)^version\s*=\s*"([^"]+)"') {
-        $Version = $Matches[1]
-    } else {
-        $Version = "0.1.1"
+function Read-CrateVersion {
+    param([string]$CargoPath, [string]$Fallback)
+    if (Test-Path $CargoPath) {
+        $raw = Get-Content $CargoPath -Raw -Encoding UTF8
+        if ($raw -match '(?m)^version\s*=\s*"([^"]+)"') {
+            return $Matches[1]
+        }
     }
+    return $Fallback
 }
+
+$SyncVersion = if ([string]::IsNullOrWhiteSpace($Version)) {
+    Read-CrateVersion (Join-Path $WindowsRepoDir "crates\nfc-bridge-sync\Cargo.toml") "0.1.1"
+} else { $Version }
+
+$ToolsVersion = if ([string]::IsNullOrWhiteSpace($Version)) {
+    Read-CrateVersion (Join-Path $WindowsRepoDir "crates\nfc-bridge-tools\Cargo.toml") "0.1.1"
+} else { $Version }
 
 $gitSha = try { (git -C $WindowsRepoDir rev-parse --short HEAD 2>$null).Trim() } catch { "nogit" }
 $gitRev = try { (git -C $WindowsRepoDir rev-list --count HEAD 2>$null).Trim() } catch { "0" }
@@ -36,7 +46,7 @@ if (-not $env:NFC_BRIDGE_BUILD_ID) {
 }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "    NFC BRIDGE WINDOWS - BUILD v$Version ($($env:NFC_BRIDGE_BUILD_ID))" -ForegroundColor Cyan
+Write-Host "    NFC BRIDGE WINDOWS - SYNC v$SyncVersion | TOOLS v$ToolsVersion ($($env:NFC_BRIDGE_BUILD_ID))" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "Repositorio Windows: $WindowsRepoDir"
 Write-Host "Directorio de Salida: $DistDir"
@@ -69,8 +79,8 @@ cargo build --release --bin nfc-bridge-sync --bin nfc-bridge-tools
 $syncX64Src = Join-Path $WindowsRepoDir "target\release\nfc-bridge-sync.exe"
 $toolsX64Src = Join-Path $WindowsRepoDir "target\release\nfc-bridge-tools.exe"
 
-$syncX64Dst = Join-Path $DistDir "nfc-bridge-sync-$Version-x64.exe"
-$toolsX64Dst = Join-Path $DistDir "nfc-bridge-tools-$Version-x64.exe"
+$syncX64Dst = Join-Path $DistDir "nfc-bridge-sync-$SyncVersion-x64.exe"
+$toolsX64Dst = Join-Path $DistDir "nfc-bridge-tools-$ToolsVersion-x64.exe"
 
 Copy-Item $syncX64Src $syncX64Dst -Force
 Copy-Item $toolsX64Src $toolsX64Dst -Force
@@ -88,8 +98,8 @@ Set-Location $WindowsRepoDir
 cargo build --release --bin nfc-bridge-sync --features portable
 cargo build --release --bin nfc-bridge-tools --features portable
 
-$syncPortDst = Join-Path $DistDir "nfc-bridge-sync-$Version-portable.exe"
-$toolsPortDst = Join-Path $DistDir "nfc-bridge-tools-$Version-portable.exe"
+$syncPortDst = Join-Path $DistDir "nfc-bridge-sync-$SyncVersion-portable.exe"
+$toolsPortDst = Join-Path $DistDir "nfc-bridge-tools-$ToolsVersion-portable.exe"
 
 Copy-Item $syncX64Src $syncPortDst -Force
 Copy-Item $toolsX64Src $toolsPortDst -Force
@@ -116,8 +126,8 @@ if (-not $SkipX86) {
                 $syncSrc = Join-Path $WindowsRepoDir "target\$t\release\nfc-bridge-sync.exe"
                 $toolsSrc = Join-Path $WindowsRepoDir "target\$t\release\nfc-bridge-tools.exe"
                 if ((Test-Path $syncSrc) -and (Test-Path $toolsSrc)) {
-                    $syncDst = Join-Path $DistDir "nfc-bridge-sync-$Version-x86.exe"
-                    $toolsDst = Join-Path $DistDir "nfc-bridge-tools-$Version-x86.exe"
+                    $syncDst = Join-Path $DistDir "nfc-bridge-sync-$SyncVersion-x86.exe"
+                    $toolsDst = Join-Path $DistDir "nfc-bridge-tools-$ToolsVersion-x86.exe"
                     Copy-Item $syncSrc $syncDst -Force
                     Copy-Item $toolsSrc $toolsDst -Force
                     $checksumList += Generate-Checksum $syncDst
@@ -153,8 +163,8 @@ if (-not $SkipArm64) {
             $syncSrc = Join-Path $WindowsRepoDir "target\$armTarget\release\nfc-bridge-sync.exe"
             $toolsSrc = Join-Path $WindowsRepoDir "target\$armTarget\release\nfc-bridge-tools.exe"
             if ((Test-Path $syncSrc) -and (Test-Path $toolsSrc)) {
-                $syncDst = Join-Path $DistDir "nfc-bridge-sync-$Version-arm64.exe"
-                $toolsDst = Join-Path $DistDir "nfc-bridge-tools-$Version-arm64.exe"
+                $syncDst = Join-Path $DistDir "nfc-bridge-sync-$SyncVersion-arm64.exe"
+                $toolsDst = Join-Path $DistDir "nfc-bridge-tools-$ToolsVersion-arm64.exe"
                 Copy-Item $syncSrc $syncDst -Force
                 Copy-Item $toolsSrc $toolsDst -Force
                 $checksumList += Generate-Checksum $syncDst
