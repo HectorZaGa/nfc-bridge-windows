@@ -29,26 +29,22 @@ use state::{OptionsTab, SharedUiCore};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use theme::{apply_egui_visuals, apply_win32_dwm_to_title, parse_hex_rgb, rgb_to_hex, rgb_to_hsv, ThemePalette};
-use tray::icon::build_nfc_rgba_bytes;
+use tray::icon::{build_nfc_rgba_bytes, load_app_icon_data};
 use tray::{estimate_tray_height, render_tray_viewport};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 pub fn run_desktop_ui(
     app_title: &str,
+    app_ico_bytes: &[u8],
     ipc: DriverIpcClient,
     updater: DesktopUpdater,
     rt_handle: tokio::runtime::Handle,
     _data_dir: std::path::PathBuf,
 ) -> anyhow::Result<()> {
-    let rgba_32 = build_nfc_rgba_bytes();
-    let eframe_icon = egui::IconData {
-        rgba: rgba_32.clone(),
-        width: 32,
-        height: 32,
-    };
-    let tray_handle = tray_icon::Icon::from_resource(2, Some((32, 32)))
+    let eframe_icon = load_app_icon_data(app_ico_bytes);
+    let tray_handle = tray_icon::Icon::from_resource(2, None)
         .ok()
-        .or_else(|| tray_icon::Icon::from_rgba(rgba_32, 32, 32).ok())
+        .or_else(|| tray_icon::Icon::from_rgba(build_nfc_rgba_bytes(), 32, 32).ok())
         .and_then(|ic| {
             TrayIconBuilder::new()
                 .with_tooltip(app_title)

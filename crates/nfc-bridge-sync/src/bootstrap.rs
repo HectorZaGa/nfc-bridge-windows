@@ -16,6 +16,7 @@ pub struct DesktopLaunchSpec {
     pub build_id: &'static str,
     pub single_instance_sync: bool,
     pub sync_product_meta_to_ipc: bool,
+    pub app_ico_bytes: &'static [u8],
 }
 
 pub fn local_outbound_ip() -> String {
@@ -145,6 +146,7 @@ pub fn run_desktop_app(spec: DesktopLaunchSpec, config: AppConfig) -> Result<()>
     #[cfg(target_os = "windows")]
     crate::ui::run_desktop_ui(
         spec.display_name,
+        spec.app_ico_bytes,
         ipc_for_ui,
         upd_for_ui,
         rt_handle,

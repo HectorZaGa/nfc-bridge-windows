@@ -41,6 +41,10 @@ fn main() -> Result<()> {
             build_id: env!("NFC_BRIDGE_BUILD_ID"),
             single_instance_sync: false,
             sync_product_meta_to_ipc: true,
+            #[cfg(target_os = "windows")]
+            app_ico_bytes: include_bytes!(concat!(env!("OUT_DIR"), "/app.ico")),
+            #[cfg(not(target_os = "windows"))]
+            app_ico_bytes: &[],
         },
         config,
     )
