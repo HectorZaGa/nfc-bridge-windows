@@ -221,12 +221,10 @@ pub fn paint_refresh_spin(
 use super::brand_svg::{paint_brand_icon, BrandIcon};
 
 pub fn paint_device_os_icon(painter: &egui::Painter, rect: Rect, os: &str, color: Color32) {
-    let icon = if os.eq_ignore_ascii_case("ios") {
-        BrandIcon::Apple
-    } else if os.eq_ignore_ascii_case("windows") {
-        BrandIcon::Windows
-    } else {
-        BrandIcon::Android
+    let icon = match os.trim().to_ascii_lowercase().as_str() {
+        "ios" | "macos" | "mac" | "apple" | "ipados" | "darwin" => BrandIcon::Apple,
+        "windows" | "win" | "win32" => BrandIcon::Windows,
+        _ => BrandIcon::Android,
     };
     paint_brand_icon(painter, rect, icon, color);
 }
