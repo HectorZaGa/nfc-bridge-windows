@@ -36,35 +36,62 @@ impl BrandIcon {
 
 #[derive(Default)]
 struct BrandTextureCache {
-    textures: HashMap<BrandIcon, (TextureHandle, f32)>,
+    aspects: HashMap<BrandIcon, f32>,
+    textures: HashMap<(BrandIcon, usize, usize), TextureHandle>,
 }
 
-/// Pinta un ícono oficial de marca dentro de `rect` manteniendo su relación de aspecto
-/// y teñido adaptativamente con `color`.
+/// Pinta un ícono oficial de marca dentro de `rect` manteniendo su relación de aspecto,
+/// rasterizado 1:1 en píxeles físicos exactos con SSAA 8×8 para evitar dientes de sierra.
 pub fn paint_brand_icon(painter: &egui::Painter, rect: Rect, icon: BrandIcon, color: Color32) {
     let ctx = painter.ctx().clone();
-    let (tex, aspect) = {
-        let arc = ctx.data_mut(|d| {
-            d.get_temp_mut_or_default::<std::sync::Arc<std::sync::Mutex<BrandTextureCache>>>(
-                egui::Id::unique("nb_brand_tex_cache"),
-            )
-            .clone()
-        });
+    let ppp = ctx.pixels_per_point().max(0.5);
+
+    let arc = ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<std::sync::Arc<std::sync::Mutex<BrandTextureCache>>>(
+            egui::Id::unique("nb_brand_tex_cache"),
+        )
+        .clone()
+    });
+
+    let aspect = {
         let mut cache = arc.lock().unwrap();
-        if let Some((handle, asp)) = cache.textures.get(&icon) {
-            (handle.clone(), *asp)
-        } else {
-            let (img, asp) = rasterize_svg_mask(icon.svg_source(), 128);
-            let handle = ctx.load_texture(icon.tex_name(), img, TextureOptions::LINEAR);
-            cache.textures.insert(icon, (handle.clone(), asp));
-            (handle, asp)
-        }
+        *cache.aspects.entry(icon).or_insert_with(|| {
+            let (_, _, vw, vh) = parse_viewbox(icon.svg_source()).unwrap_or((0.0, 0.0, 24.0, 24.0));
+            (vw / vh.max(1e-3)).max(0.05)
+        })
     };
 
     let fit = fit_aspect_rect(rect, aspect);
+    let out_w = (fit.width() * ppp).round().clamp(8.0, 512.0) as usize;
+    let out_h = (fit.height() * ppp).round().clamp(8.0, 512.0) as usize;
+
+    let tex = {
+        let mut cache = arc.lock().unwrap();
+        if let Some(handle) = cache.textures.get(&(icon, out_w, out_h)) {
+            handle.clone()
+        } else {
+            let img = rasterize_svg_mask_exact(icon.svg_source(), out_w, out_h);
+            let name = format!("{}_{}x{}", icon.tex_name(), out_w, out_h);
+            let handle = ctx.load_texture(name, img, TextureOptions::LINEAR);
+            if cache.textures.len() > 24 {
+                cache.textures.clear();
+            }
+            cache.textures.insert((icon, out_w, out_h), handle.clone());
+            handle
+        }
+    };
+
+    let snapped_min = Pos2::new(
+        (fit.center().x * ppp - out_w as f32 * 0.5).round() / ppp,
+        (fit.center().y * ppp - out_h as f32 * 0.5).round() / ppp,
+    );
+    let draw_rect = Rect::from_min_size(
+        snapped_min,
+        Vec2::new(out_w as f32 / ppp, out_h as f32 / ppp),
+    );
     painter.image(
         tex.id(),
-        fit,
+        draw_rect,
         Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
         color,
     );
@@ -95,10 +122,9 @@ struct PathGroup {
     rule: FillRule,
 }
 
+#[cfg(test)]
 pub(crate) fn rasterize_svg_mask(svg: &str, max_dim: usize) -> (ColorImage, f32) {
-    let (vx, vy, vw, vh) = parse_viewbox(svg).unwrap_or((0.0, 0.0, 24.0, 24.0));
-    let paths = extract_paths(svg);
-
+    let (_, _, vw, vh) = parse_viewbox(svg).unwrap_or((0.0, 0.0, 24.0, 24.0));
     let aspect = (vw / vh.max(1e-3)).max(0.05);
     let (out_w, out_h) = if aspect >= 1.0 {
         let h = ((max_dim as f32) / aspect).round().max(8.0) as usize;
@@ -107,6 +133,12 @@ pub(crate) fn rasterize_svg_mask(svg: &str, max_dim: usize) -> (ColorImage, f32)
         let w = ((max_dim as f32) * aspect).round().max(8.0) as usize;
         (w, max_dim)
     };
+    (rasterize_svg_mask_exact(svg, out_w, out_h), aspect)
+}
+
+pub(crate) fn rasterize_svg_mask_exact(svg: &str, out_w: usize, out_h: usize) -> ColorImage {
+    let (vx, vy, vw, vh) = parse_viewbox(svg).unwrap_or((0.0, 0.0, 24.0, 24.0));
+    let paths = extract_paths(svg);
 
     let scale_x = out_w as f32 / vw.max(1e-3);
     let scale_y = out_h as f32 / vh.max(1e-3);
@@ -120,7 +152,7 @@ pub(crate) fn rasterize_svg_mask(svg: &str, max_dim: usize) -> (ColorImage, f32)
     }
 
     let mut rgba = vec![0u8; out_w * out_h * 4];
-    const SUB: usize = 4;
+    const SUB: usize = 8;
     let inv_samples = 1.0 / (SUB * SUB) as f32;
 
     for py in 0..out_h {
@@ -148,7 +180,7 @@ pub(crate) fn rasterize_svg_mask(svg: &str, max_dim: usize) -> (ColorImage, f32)
         }
     }
 
-    (ColorImage::from_rgba_unmultiplied([out_w, out_h], &rgba), aspect)
+    ColorImage::from_rgba_unmultiplied([out_w, out_h], &rgba)
 }
 
 fn parse_viewbox(svg: &str) -> Option<(f32, f32, f32, f32)> {
@@ -442,7 +474,7 @@ fn push_cubic(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2: (f3
         + (p2.0 - p1.0).hypot(p2.1 - p1.1)
         + (p3.0 - p2.0).hypot(p3.1 - p2.1))
     .max(1.0);
-    let steps = (dist * 1.2).ceil().clamp(6.0, 48.0) as usize;
+    let steps = (dist * 3.0).ceil().clamp(8.0, 96.0) as usize;
     for s in 1..=steps {
         let t = s as f32 / steps as f32;
         let u = 1.0 - t;
@@ -454,7 +486,7 @@ fn push_cubic(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2: (f3
 
 fn push_quad(out: &mut Vec<(f32, f32)>, p0: (f32, f32), p1: (f32, f32), p2: (f32, f32)) {
     let dist = ((p1.0 - p0.0).hypot(p1.1 - p0.1) + (p2.0 - p1.0).hypot(p2.1 - p1.1)).max(1.0);
-    let steps = (dist * 1.2).ceil().clamp(4.0, 32.0) as usize;
+    let steps = (dist * 3.0).ceil().clamp(6.0, 64.0) as usize;
     for s in 1..=steps {
         let t = s as f32 / steps as f32;
         let u = 1.0 - t;
@@ -540,5 +572,13 @@ mod tests {
         assert!((w_asp - 1.0).abs() < 0.05);
         assert_eq!(alpha_at(&win_img, 0.20, 0.20), 255);
         assert_eq!(alpha_at(&win_img, 0.50, 0.50), 0);
+    }
+
+    #[test]
+    fn test_brand_icons_small_size_smooth_aa() {
+        let img = rasterize_svg_mask_exact(ANDROID_SVG, 22, 12);
+        assert_eq!(img.size, [22, 12]);
+        let has_fractional_aa = img.pixels.iter().any(|p| p.a() > 0 && p.a() < 255);
+        assert!(has_fractional_aa, "Debe producir cobertura anti-aliasing suave 8x8 en tamaño UI pequeño");
     }
 }
