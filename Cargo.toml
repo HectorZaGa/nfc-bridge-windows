@@ -11,7 +11,7 @@ resolver = "2"
 version = "0.1.6"
 edition = "2021"
 authors = ["Hector Zarate <HectorZaGa96@hotmail.com>"]
-license = "MIT"
+license = "GPL-3.0-only"
 repository = "https://github.com/HectorZaGa/nfc-bridge-windows"
 
 [workspace.dependencies]
