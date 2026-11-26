@@ -16,7 +16,10 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
-use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+use windows_sys::Win32::System::Registry::{
+    RegCloseKey, RegDeleteValueW, RegGetValueW, RegOpenKeyExW, RegSetValueExW, HKEY,
+    HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+};
 use windows_sys::Win32::System::Threading::{
     OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
 };
@@ -536,4 +539,70 @@ pub fn poll_tray_input_edges_win32(prev_mask: &mut u8) -> (bool, bool) {
     let mouse_down = (rising & 0b0111) != 0;
     let esc_down = (rising & 0b1000) != 0;
     (mouse_down, esc_down)
+}
+
+const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+
+pub fn is_windows_autostart_enabled(value_name: &str) -> bool {
+    let subkey_w: Vec<u16> = RUN_SUBKEY.encode_utf16().chain(std::iter::once(0)).collect();
+    let value_w: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut cb_data: u32 = 0;
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            subkey_w.as_ptr(),
+            value_w.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut cb_data,
+        )
+    };
+    status == 0 && cb_data > 2
+}
+
+pub fn set_windows_autostart(value_name: &str, enabled: bool) -> bool {
+    let subkey_w: Vec<u16> = RUN_SUBKEY.encode_utf16().chain(std::iter::once(0)).collect();
+    let value_w: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut hkey: HKEY = std::ptr::null_mut();
+    let open_rc = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            subkey_w.as_ptr(),
+            0,
+            KEY_SET_VALUE,
+            &mut hkey,
+        )
+    };
+    if open_rc != 0 || hkey.is_null() {
+        return false;
+    }
+
+    let ok = if enabled {
+        if let Ok(exe_path) = std::env::current_exe() {
+            let cmd = format!("\"{}\" --minimized", exe_path.display());
+            let cmd_w: Vec<u16> = cmd.encode_utf16().chain(std::iter::once(0)).collect();
+            let bytes_len = (cmd_w.len() * std::mem::size_of::<u16>()) as u32;
+            unsafe {
+                RegSetValueExW(
+                    hkey,
+                    value_w.as_ptr(),
+                    0,
+                    REG_SZ,
+                    cmd_w.as_ptr() as *const u8,
+                    bytes_len,
+                ) == 0
+            }
+        } else {
+            false
+        }
+    } else {
+        let rc = unsafe { RegDeleteValueW(hkey, value_w.as_ptr()) };
+        rc == 0 || rc == 2 // ERROR_FILE_NOT_FOUND
+    };
+
+    unsafe {
+        let _ = RegCloseKey(hkey);
+    }
+    ok
 }

@@ -5,10 +5,10 @@ mod win32;
 pub use win32::{
     apply_win32_dwm_to_title, configure_tray_popup_win32, current_tray_input_mask_win32,
     detect_windows_dark_mode, detect_windows_spanish_locale, hide_tray_popup_win32,
-    is_cursor_in_window_win32, launch_elevated_or_normal, poll_tray_input_edges_win32,
-    prepare_cloaked_window_win32, read_windows_accent_hex, replace_previous_sync_processes,
-    restore_main_window_win32, show_tray_popup_at_win32, show_tray_submenu_at_win32,
-    uncloak_window_win32,
+    is_cursor_in_window_win32, is_windows_autostart_enabled, launch_elevated_or_normal,
+    poll_tray_input_edges_win32, prepare_cloaked_window_win32, read_windows_accent_hex,
+    replace_previous_sync_processes, restore_main_window_win32, set_windows_autostart,
+    show_tray_popup_at_win32, show_tray_submenu_at_win32, uncloak_window_win32,
 };
 
 /// Crea un `Command` ocultando ventanas de consola auxiliares en Windows (`CREATE_NO_WINDOW`).
@@ -44,6 +44,16 @@ pub fn read_windows_accent_hex() -> String {
 #[cfg(not(windows))]
 pub fn replace_previous_sync_processes() -> usize {
     0
+}
+
+#[cfg(not(windows))]
+pub fn is_windows_autostart_enabled(_value_name: &str) -> bool {
+    false
+}
+
+#[cfg(not(windows))]
+pub fn set_windows_autostart(_value_name: &str, _enabled: bool) -> bool {
+    false
 }
 
 #[cfg(not(windows))]

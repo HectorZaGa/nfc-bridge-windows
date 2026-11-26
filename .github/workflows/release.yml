@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 1.1.0)'
-        required: true
-        default: '1.1.0'
+        description: 'Optional version override (defaults to Cargo.toml per crate)'
+        required: false
+        default: ''
   push:
     tags:
       - 'v*'
@@ -23,73 +23,158 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc,i686-pc-windows-msvc,aarch64-pc-windows-msvc
 
-      - name: Determine Version
+      - name: Ensure LLVM clang and Inno Setup 6
+        shell: pwsh
+        run: |
+          if (-not (Get-Command clang.exe -ErrorAction SilentlyContinue)) {
+            if (Test-Path "C:\Program Files\LLVM\bin\clang.exe") {
+              "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            } else {
+              choco install llvm -y --no-progress
+              "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            }
+          }
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+          "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Determine Versions
         id: ver
         shell: pwsh
         run: |
-          if ("${{ github.ref }}" -like "refs/tags/v*") {
-            $v = "${{ github.ref_name }}".TrimStart('v')
-          } else {
-            $v = "${{ github.event.inputs.version }}"
-            if (-not $v) { $v = "1.1.0" }
+          $syncToml = Get-Content "crates\nfc-bridge-sync\Cargo.toml" -Raw
+          $toolsToml = Get-Content "crates\nfc-bridge-tools\Cargo.toml" -Raw
+          $syncVer = ([regex]::Match($syncToml, '(?m)^version\s*=\s*"([^"]+)"')).Groups[1].Value
+          $toolsVer = ([regex]::Match($toolsToml, '(?m)^version\s*=\s*"([^"]+)"')).Groups[1].Value
+          if ("${{ github.ref }}" -like "refs/tags/sync-v*") {
+            $syncVer = ("${{ github.ref_name }}" -replace '^sync-v', '' -split '-')[0]
+          } elseif ("${{ github.ref }}" -like "refs/tags/tools-v*") {
+            $toolsVer = ("${{ github.ref_name }}" -replace '^tools-v', '' -split '-')[0]
+          } elseif ("${{ github.event.inputs.version }}".Trim()) {
+            $override = "${{ github.event.inputs.version }}".Trim()
+            $syncVer = $override
+            $toolsVer = $override
           }
-          echo "version=$v" >> $env:GITHUB_OUTPUT
+          echo "sync_version=$syncVer" >> $env:GITHUB_OUTPUT
+          echo "tools_version=$toolsVer" >> $env:GITHUB_OUTPUT
 
-      - name: Build x64, x86, ARM64 and Portable binaries
+      - name: Run Workspace Tests
+        shell: pwsh
+        run: cargo test --workspace
+
+      - name: Build x64, x86, ARM64 Installers (Inno Setup) and Portable ZIPs
         shell: pwsh
         run: |
-          $Version = "${{ steps.ver.outputs.version }}"
-          $DistDir = "dist"
-          New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
+          $Root = (Get-Location).Path
+          $OutDir = Join-Path $Root "target\packages"
+          New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 
-          function Add-Sha256($path) {
-            $hash = (Get-FileHash -Path $path -Algorithm SHA256).Hash.ToLower()
-            $name = Split-Path -Leaf $path
-            [System.IO.File]::WriteAllText("$path.sha256", "$hash *$name`n")
-            return "$hash *$name"
+          $IssPath = Join-Path $Root "packaging\nfc-bridge.iss"
+          $Iscc = (Get-Command ISCC.exe).Source
+
+          $Targets = @(
+            @{ Arch = "x64";   Triple = "x86_64-pc-windows-msvc" },
+            @{ Arch = "x86";   Triple = "i686-pc-windows-msvc" },
+            @{ Arch = "arm64"; Triple = "aarch64-pc-windows-msvc" }
+          )
+
+          $Apps = @(
+            @{
+              Slug = "sync"
+              Pkg = "nfc-bridge-sync"
+              Ver = "${{ steps.ver.outputs.sync_version }}"
+              PortableExe = "NFC Bridge Sync Portable.exe"
+              SetupIcon = Join-Path $Root "assets\icons\sync\setup.ico"
+              UninstallIcon = Join-Path $Root "assets\icons\sync\uninstall.ico"
+            },
+            @{
+              Slug = "tools"
+              Pkg = "nfc-bridge-tools"
+              Ver = "${{ steps.ver.outputs.tools_version }}"
+              PortableExe = "NFC Bridge Tools Portable.exe"
+              SetupIcon = Join-Path $Root "assets\icons\tools\setup.ico"
+              UninstallIcon = Join-Path $Root "assets\icons\tools\uninstall.ico"
+            }
+          )
+
+          foreach ($app in $Apps) {
+            $slug = $app.Slug
+            $pkg = $app.Pkg
+            $ver = $app.Ver
+            $payloads = @{}
+
+            foreach ($t in $Targets) {
+              # 1. Portable EXE -> ZIP with portable.dat
+              cargo build --release --target $t.Triple -p $pkg --features portable
+              if ($LASTEXITCODE -ne 0) { throw "Failed portable build for $pkg ($($t.Triple))" }
+              $portBuilt = Join-Path $Root "target\$($t.Triple)\release\$pkg.exe"
+              $stage = Join-Path $env:TEMP ("nb_port_" + [guid]::NewGuid().ToString("N"))
+              New-Item -ItemType Directory -Path $stage -Force | Out-Null
+              try {
+                Copy-Item -LiteralPath $portBuilt -Destination (Join-Path $stage $app.PortableExe) -Force
+                [System.IO.File]::WriteAllText((Join-Path $stage "portable.dat"), "portable=1`n", [System.Text.UTF8Encoding]::new($false))
+                Compress-Archive -Path (Join-Path $stage "*") -DestinationPath (Join-Path $OutDir "$pkg-$ver-windows-$($t.Arch)-portable.zip") -CompressionLevel Optimal -Force
+              } finally {
+                Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+              }
+
+              # 2. Standard Installed EXE -> Per-arch Setup
+              cargo build --release --target $t.Triple -p $pkg
+              if ($LASTEXITCODE -ne 0) { throw "Failed release build for $pkg ($($t.Triple))" }
+              $stdBuilt = Join-Path $Root "target\$($t.Triple)\release\$pkg.exe"
+              $payloads[$t.Arch] = $stdBuilt
+
+              & $Iscc "/Q" `
+                "/DProductSlug=$slug" `
+                "/DAppVersion=$ver" `
+                "/DArch=$($t.Arch)" `
+                "/DUniversalMode=0" `
+                "/DPayloadExe=$stdBuilt" `
+                "/DSetupIcon=$($app.SetupIcon)" `
+                "/DUninstallIcon=$($app.UninstallIcon)" `
+                "/DOutputDir=$OutDir" `
+                "/DOutputBaseFilename=$pkg-$ver-windows-$($t.Arch)-setup" `
+                $IssPath
+              if ($LASTEXITCODE -ne 0) { throw "Failed ISCC for $pkg ($($t.Arch))" }
+            }
+
+            # 3. Universal Setup (x64 / x86 / ARM64)
+            & $Iscc "/Q" `
+              "/DProductSlug=$slug" `
+              "/DAppVersion=$ver" `
+              "/DUniversalMode=1" `
+              "/DPayloadExeX64=$($payloads['x64'])" `
+              "/DPayloadExeX86=$($payloads['x86'])" `
+              "/DPayloadExeArm64=$($payloads['arm64'])" `
+              "/DSetupIcon=$($app.SetupIcon)" `
+              "/DUninstallIcon=$($app.UninstallIcon)" `
+              "/DOutputDir=$OutDir" `
+              "/DOutputBaseFilename=$pkg-$ver-windows-setup" `
+              $IssPath
+            if ($LASTEXITCODE -ne 0) { throw "Failed Universal ISCC for $pkg" }
           }
 
-          $sums = @()
+          $sums = Get-ChildItem -Path $OutDir -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          [System.IO.File]::WriteAllLines((Join-Path $OutDir "SHA256SUMS.txt"), $sums, [System.Text.UTF8Encoding]::new($false))
 
-          # 1. x64 standard
-          cargo build --release --target x86_64-pc-windows-msvc --bin nfc-bridge-sync --bin nfc-bridge-tools
-          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-x64.exe" -Force
-          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-x64.exe" -Force
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-x64.exe"
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-x64.exe"
-
-          # 2. Portable (-portable.exe with compile-time portable feature)
-          cargo build --release --target x86_64-pc-windows-msvc --bin nfc-bridge-sync --features portable
-          cargo build --release --target x86_64-pc-windows-msvc --bin nfc-bridge-tools --features portable
-          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-portable.exe" -Force
-          Copy-Item "target\x86_64-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-portable.exe" -Force
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-portable.exe"
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-portable.exe"
-
-          # 3. x86 (32-bit)
-          cargo build --release --target i686-pc-windows-msvc --bin nfc-bridge-sync --bin nfc-bridge-tools
-          Copy-Item "target\i686-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-x86.exe" -Force
-          Copy-Item "target\i686-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-x86.exe" -Force
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-x86.exe"
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-x86.exe"
-
-          # 4. ARM64
-          cargo build --release --target aarch64-pc-windows-msvc --bin nfc-bridge-sync --bin nfc-bridge-tools
-          Copy-Item "target\aarch64-pc-windows-msvc\release\nfc-bridge-sync.exe" "$DistDir\nfc-bridge-sync-$Version-arm64.exe" -Force
-          Copy-Item "target\aarch64-pc-windows-msvc\release\nfc-bridge-tools.exe" "$DistDir\nfc-bridge-tools-$Version-arm64.exe" -Force
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-sync-$Version-arm64.exe"
-          $sums += Add-Sha256 "$DistDir\nfc-bridge-tools-$Version-arm64.exe"
-
-          [System.IO.File]::WriteAllLines("$DistDir\SHA256SUMS.txt", $sums)
+      # Placeholder para firma con SignPath Foundation una vez aprobada la organización:
+      # Añadir submit-signing-request con ${{ secrets.SIGNPATH_API_TOKEN }}.
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nfc-bridge-windows-${{ steps.ver.outputs.version }}
-          path: dist/*
+          name: nfc-bridge-windows-${{ steps.ver.outputs.sync_version }}
+          path: target/packages/*
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: target/packages/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

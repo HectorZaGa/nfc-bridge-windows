@@ -43,12 +43,15 @@ use tray::{
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 pub fn run_desktop_ui(
+    product_slug: &str,
     app_title: &str,
     app_ico_bytes: &[u8],
     ipc: DriverIpcClient,
     updater: DesktopUpdater,
     rt_handle: tokio::runtime::Handle,
-    _data_dir: std::path::PathBuf,
+    app_config: crate::AppConfig,
+    initial_visible: bool,
+    force_focus: bool,
 ) -> anyhow::Result<()> {
     let eframe_icon = load_app_icon_data(app_ico_bytes);
     let tray_handle = tray_icon::Icon::from_resource(2, None)
@@ -72,12 +75,21 @@ pub fn run_desktop_ui(
     let (r0, g0, b0) = parse_hex_rgb(&init_live.ui_settings.custom_accent_hex);
     let (h0, s0, v0) = rgb_to_hsv(r0, g0, b0);
 
+    let autostart_reg = if product_slug == "sync" {
+        crate::platform::is_windows_autostart_enabled("NfcBridgeSync") || app_config.autostart_with_windows
+    } else {
+        app_config.autostart_with_windows
+    };
+
     let core = Arc::new(Mutex::new(SharedUiCore {
         ipc: ipc.clone(),
         updater: updater.clone(),
         rt: rt_handle.clone(),
         i18n: I18nCatalog::load(),
+        product_slug: product_slug.to_string(),
         app_title: app_title.to_string(),
+        app_config,
+        autostart_enabled: autostart_reg,
         sidebar_compact: init_live.ui_settings.settings_sidebar_compact,
         auto_mobile_optimistic: init_live.snapshot.auto_accept_mobile_switch,
         net_ip_buf: init_live.snapshot.tcp_ip_override.clone().unwrap_or_default(),
@@ -90,8 +102,8 @@ pub fn run_desktop_ui(
             .is_some_and(|u| !u.is_empty()),
         live: init_live,
         updates: init_updates,
-        main_visible: true,
-        main_want_focus: false,
+        main_visible: initial_visible,
+        main_want_focus: force_focus,
         options_open: false,
         options_just_opened: false,
         options_want_focus: false,
@@ -156,6 +168,7 @@ pub fn run_desktop_ui(
         viewport: ViewportBuilder::default()
             .with_title(app_title)
             .with_inner_size([860.0, 504.0])
+            .with_visible(initial_visible)
             .with_decorations(false)
             .with_resizable(false)
             .with_transparent(false)
@@ -292,6 +305,7 @@ pub fn run_desktop_ui(
                 core,
                 _tray: tray_handle,
                 tray_events,
+                last_tray_tooltip: String::new(),
             }))
         }),
     )
@@ -344,12 +358,14 @@ fn spawn_state_sync_loop(
                 let saved_toggles = if keep_snapshot {
                     Some((
                         guard.live.paused,
+                        guard.live.pause_reason.clone(),
                         guard.live.snapshot.usb_enabled,
                         guard.live.snapshot.usb_auto_connect,
                         guard.live.snapshot.tcp_enabled,
                         guard.live.snapshot.bt_enabled,
                         guard.live.snapshot.wfd_enabled,
                         guard.live.snapshot.auto_accept_mobile_switch,
+                        guard.live.snapshot.read_only_mode,
                     ))
                 } else {
                     None
@@ -360,14 +376,16 @@ fn spawn_state_sync_loop(
                 } else {
                     guard.sidebar_compact = guard.live.ui_settings.settings_sidebar_compact;
                 }
-                if let Some((p, ue, ua, te, be, we, am)) = saved_toggles {
+                if let Some((p, pr, ue, ua, te, be, we, am, ro)) = saved_toggles {
                     guard.live.paused = p;
+                    guard.live.pause_reason = pr;
                     guard.live.snapshot.usb_enabled = ue;
                     guard.live.snapshot.usb_auto_connect = ua;
                     guard.live.snapshot.tcp_enabled = te;
                     guard.live.snapshot.bt_enabled = be;
                     guard.live.snapshot.wfd_enabled = we;
                     guard.live.snapshot.auto_accept_mobile_switch = am;
+                    guard.live.snapshot.read_only_mode = ro;
                 }
                 guard.updates = upd;
 
@@ -407,6 +425,42 @@ struct NfcBridgeEguiApp {
     core: Arc<Mutex<SharedUiCore>>,
     _tray: Option<TrayIcon>,
     tray_events: Arc<Mutex<Vec<TrayIconEvent>>>,
+    last_tray_tooltip: String,
+}
+
+impl NfcBridgeEguiApp {
+    fn sync_tray_tooltip(&mut self) {
+        let Some(ref tray) = self._tray else {
+            return;
+        };
+        let next_tip = {
+            let g = self.core.lock().unwrap();
+            let st = &g.live;
+            if !st.driver_online {
+                format!("{} — {}", g.app_display_name(), g.t("device_driver_stopped"))
+            } else if st.connected && st.paused {
+                let reason = g.t(SharedUiCore::paused_reason_key(st.pause_reason.as_deref()));
+                format!("{} — {}", g.app_display_name(), reason)
+            } else if st.connected {
+                let dev = st.device_name.as_deref().unwrap_or("Android");
+                if st.tag_present {
+                    if let Some(ref uid) = st.tag_uid {
+                        format!("{} — {} (UID {})", g.app_display_name(), dev, uid)
+                    } else {
+                        format!("{} — {} ({} ms)", g.app_display_name(), dev, st.latency_ms)
+                    }
+                } else {
+                    format!("{} — {} ({} ms)", g.app_display_name(), dev, st.latency_ms)
+                }
+            } else {
+                format!("{} — {}", g.app_display_name(), g.t("device_disconnected_short"))
+            }
+        };
+        if self.last_tray_tooltip != next_tip {
+            self.last_tray_tooltip = next_tip.clone();
+            let _ = tray.set_tooltip(Some(&next_tip));
+        }
+    }
 }
 
 impl eframe::App for NfcBridgeEguiApp {
@@ -420,6 +474,7 @@ impl eframe::App for NfcBridgeEguiApp {
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let _ = &self.tray_events;
+        self.sync_tray_tooltip();
 
         if ctx.input(|i| i.viewport().close_requested()) {
             let mut g = self.core.lock().unwrap();

@@ -136,8 +136,10 @@ impl DriverIpcClient {
             st.device_os = None;
             st.active_device_id = None;
             st.paused = false;
+            st.pause_reason = None;
             st.tag_present = false;
             st.tag_uid = None;
+            st.tag_technologies.clear();
         }
         Self::reconcile_saved_selection(&mut st, Some(device_id));
     }
@@ -354,8 +356,11 @@ impl DriverIpcClient {
                 device_name,
                 latency_ms,
                 paused,
+                pause_reason,
                 tag_present,
                 tag_uid,
+                tag_technologies,
+                read_only_mode,
                 transport,
                 mobile_id,
                 device_os,
@@ -388,8 +393,11 @@ impl DriverIpcClient {
                     }
                     st.latency_ms = latency_ms;
                     st.paused = paused;
+                    st.pause_reason = pause_reason;
                     st.tag_present = tag_present;
                     st.tag_uid = tag_uid.clone();
+                    st.tag_technologies = tag_technologies;
+                    st.snapshot.read_only_mode = read_only_mode;
                 }
                 if connected {
                     info!(
@@ -459,6 +467,7 @@ impl DriverIpcClient {
                 driver_build_id,
                 tcp_ip_override,
                 auto_accept_mobile_switch,
+                read_only_mode,
                 trusted_devices,
                 network_online,
             } => {
@@ -487,6 +496,7 @@ impl DriverIpcClient {
                     driver_build_id,
                     tcp_ip_override,
                     auto_accept_mobile_switch,
+                    read_only_mode,
                     trusted_devices,
                     network_online,
                 };
@@ -579,8 +589,10 @@ impl DriverIpcClient {
                     st.endpoint = None;
                     st.device_os = None;
                     st.paused = false;
+                    st.pause_reason = None;
                     st.tag_present = false;
                     st.tag_uid = None;
+                    st.tag_technologies.clear();
                 }
                 info!("[Driver] Dispositivo móvil desconectado.");
             }
@@ -597,6 +609,7 @@ impl DriverIpcClient {
                     let mut st = self.state.write().await;
                     st.tag_present = true;
                     st.tag_uid = Some(uid.clone());
+                    st.tag_technologies = technologies.clone();
                 }
                 let tag_type = if is_ntag215 || technologies.iter().any(|t| t == "MifareUltralight")
                 {
@@ -617,6 +630,7 @@ impl DriverIpcClient {
                     let mut st = self.state.write().await;
                     st.tag_present = false;
                     st.tag_uid = None;
+                    st.tag_technologies.clear();
                 }
                 info!("[Driver] Etiqueta NFC retirada del campo.");
             }

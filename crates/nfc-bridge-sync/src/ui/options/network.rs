@@ -16,6 +16,10 @@ pub(crate) fn render_opt_network(
 ) {
     let (
         hdr,
+        is_sync_app,
+        autostart_title,
+        autostart_desc,
+        autostart_on,
         auto_title,
         auto_desc,
         ip_lbl,
@@ -44,6 +48,10 @@ pub(crate) fn render_opt_network(
         });
         (
             g.t("settings_network_header").to_uppercase(),
+            g.product_slug == "sync",
+            g.t("settings_autostart_title").to_string(),
+            g.t("settings_autostart_desc").to_string(),
+            g.autostart_enabled,
             g.t("settings_auto_mobile_title").to_string(),
             g.t("settings_auto_mobile_desc").to_string(),
             g.t("settings_tcp_ip_label").to_string(),
@@ -67,6 +75,46 @@ pub(crate) fn render_opt_network(
         .inner_margin(Margin::same(12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
+
+            if is_sync_app {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new(autostart_title)
+                                .font(semibold(14.0))
+                                .color(pal.on_surface),
+                        );
+                        ui.label(
+                            RichText::new(autostart_desc)
+                                .size(11.0)
+                                .color(pal.on_surface_muted),
+                        );
+                    });
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let st_lbl = {
+                            core.lock()
+                                .unwrap()
+                                .t(if autostart_on { "state_on" } else { "state_off" })
+                                .to_string()
+                        };
+                        if switch_pill_btn(ui, pal, &st_lbl, autostart_on) {
+                            let next = !autostart_on;
+                            let mut g = core.lock().unwrap();
+                            g.autostart_enabled = next;
+                            g.app_config.autostart_with_windows = next;
+                            let _ = g.app_config.save();
+                            #[cfg(windows)]
+                            {
+                                let _ = crate::platform::set_windows_autostart("NfcBridgeSync", next);
+                            }
+                        }
+                    });
+                });
+
+                ui.add_space(10.0);
+                paint_divider(ui, pal);
+                ui.add_space(10.0);
+            }
 
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {

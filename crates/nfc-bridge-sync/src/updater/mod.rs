@@ -323,7 +323,7 @@ impl DesktopUpdater {
                 let extracted_exe = extract_exe_from_zip(&installer_path, &updates_dir.join("app_stage"))?;
                 launch_detached(&extracted_exe, &[])?;
             } else {
-                launch_detached(
+                launch_elevated_or_normal(
                     &installer_path,
                     &["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
                 )?;

@@ -4,4 +4,10 @@ Cargo.lock
 .idea
 .vscode
 *.log
-dist
+*.p12
+*.pfx
+*.pem
+*.key
+*.snk
+.env
+.env.*

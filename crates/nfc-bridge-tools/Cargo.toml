@@ -1,6 +1,6 @@
 [package]
 name = "nfc-bridge-tools"
-version = "0.6.0"
+version = "0.7.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -8,7 +8,6 @@ license.workspace = true
 [features]
 default = []
 portable = []
-headless-http = ["nfc-bridge-sync/headless-http"]
 
 [dependencies]
 core-proto = { workspace = true }

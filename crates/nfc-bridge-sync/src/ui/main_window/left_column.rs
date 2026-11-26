@@ -34,6 +34,11 @@ pub(crate) fn render_left_column(
         driver_online,
         driver_installed,
         lang,
+        reader_bar_txt,
+        reader_bar_col,
+        read_only_on,
+        readonly_lbl,
+        readonly_hint,
     ) = {
         let g = core.lock().unwrap();
         let st = &g.live;
@@ -93,7 +98,8 @@ pub(crate) fn render_left_column(
                 .to_string()
             });
             let meta = if st.paused {
-                g.t("device_reader_paused").to_string()
+                g.t(SharedUiCore::paused_reason_key(st.pause_reason.as_deref()))
+                    .to_string()
             } else {
                 g.t_vars(
                     "device_reader_active_ms",
@@ -124,6 +130,51 @@ pub(crate) fn render_left_column(
             )
         };
 
+        let active_mid = st
+            .mobile_id
+            .as_deref()
+            .or_else(|| active_profile.and_then(|p| p.mobile_id.as_deref()))
+            .filter(|s| !s.trim().is_empty());
+
+        let (bar_txt, bar_col) = if !st.driver_online {
+            (
+                g.t("reader_virtual_offline").to_string(),
+                pal.on_surface_muted,
+            )
+        } else if st.connected && st.paused {
+            (
+                g.t("reader_virtual_paused").to_string(),
+                pal.amber_pause,
+            )
+        } else if st.connected && st.tag_present {
+            let uid_str = st.tag_uid.as_deref().unwrap_or("-");
+            let mut txt = g.t_vars("reader_uid_active", &[("uid", uid_str)]);
+            if let Some(first_tech) = st.tag_technologies.first() {
+                txt.push_str(&format!(" • {}", first_tech));
+            }
+            (txt, pal.led_green)
+        } else if st.connected {
+            let mut txt = g.t("reader_virtual_ready").to_string();
+            if let Some(mid) = active_mid {
+                txt.push_str(&format!(" • {}", g.t_vars("device_id_prefix", &[("id", mid)])));
+            }
+            (txt, pal.accent)
+        } else if let Some(mid) = active_mid {
+            (
+                format!(
+                    "{} • {}",
+                    g.t("reader_virtual_offline"),
+                    g.t_vars("device_id_prefix", &[("id", mid)])
+                ),
+                pal.on_surface_muted,
+            )
+        } else {
+            (
+                g.t("reader_virtual_offline").to_string(),
+                pal.on_surface_muted,
+            )
+        };
+
         (
             count_txt,
             g.t("section_mobile_device").to_string(),
@@ -143,6 +194,11 @@ pub(crate) fn render_left_column(
             st.driver_online,
             st.driver_installed,
             g.current_lang().to_string(),
+            bar_txt,
+            bar_col,
+            snap.read_only_mode,
+            g.t("reader_readonly_label").to_string(),
+            g.t("reader_readonly_title").to_string(),
         )
     };
 
@@ -400,9 +456,113 @@ pub(crate) fn render_left_column(
             });
         });
 
-    ui.add_space(12.0);
+    ui.add_space(6.0);
+    egui::Frame::new()
+        .fill(pal.surface_card)
+        .stroke(Stroke::new(1.0, pal.outline))
+        .corner_radius(CornerRadius::same(8))
+        .inner_margin(Margin::symmetric(10, 4))
+        .show(ui, |ui| {
+            let full_w = ui.available_width();
+            let ro_gal = ui.painter().layout_no_wrap(
+                readonly_lbl.clone(),
+                FontId::proportional(11.0),
+                pal.on_surface,
+            );
+            let ro_w = (ro_gal.size().x + 26.0).clamp(78.0, 118.0);
+            ui.allocate_ui_with_layout(
+                Vec2::new(full_w, 22.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    let text_w = (full_w - ro_w - 8.0).max(80.0);
+                    let (info_rect, _) = ui.allocate_exact_size(Vec2::new(text_w, 22.0), Sense::hover());
+                    ui.painter().circle_filled(
+                        Pos2::new(info_rect.left() + 4.0, info_rect.center().y),
+                        3.5,
+                        reader_bar_col,
+                    );
+                    let info_gal = ui.painter().layout(
+                        reader_bar_txt,
+                        FontId::proportional(11.0),
+                        pal.on_surface_muted,
+                        (text_w - 14.0).max(40.0),
+                    );
+                    ui.painter().with_clip_rect(info_rect).galley(
+                        Pos2::new(
+                            info_rect.left() + 12.0,
+                            info_rect.center().y - info_gal.size().y * 0.5,
+                        ),
+                        info_gal,
+                        pal.on_surface_muted,
+                    );
+
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let (ro_rect, ro_resp) = ui.allocate_exact_size(
+                            Vec2::new(ro_w, 22.0),
+                            if driver_online { Sense::click() } else { Sense::hover() },
+                        );
+                        let (bg, border, fg) = if !driver_online {
+                            (
+                                pal.surface_elevated.gamma_multiply(0.35),
+                                pal.outline.gamma_multiply(0.35),
+                                pal.on_surface_muted.gamma_multiply(0.4),
+                            )
+                        } else if read_only_on {
+                            (pal.amber_soft, pal.amber_pause, pal.amber_pause)
+                        } else {
+                            (
+                                if ro_resp.hovered() {
+                                    pal.surface_elevated
+                                } else {
+                                    Color32::TRANSPARENT
+                                },
+                                pal.outline,
+                                pal.on_surface_muted,
+                            )
+                        };
+                        ui.painter().rect(
+                            ro_rect,
+                            CornerRadius::same(6),
+                            bg,
+                            Stroke::new(1.0, border),
+                            StrokeKind::Inside,
+                        );
+                        if read_only_on {
+                            paint_glyph(
+                                ui.painter(),
+                                Pos2::new(ro_rect.left() + 10.0, ro_rect.center().y),
+                                glyph::CHECK,
+                                12.0,
+                                fg,
+                            );
+                        } else {
+                            ui.painter().circle_stroke(
+                                Pos2::new(ro_rect.left() + 10.0, ro_rect.center().y),
+                                4.0,
+                                Stroke::new(1.2, fg),
+                            );
+                        }
+                        ui.painter().text(
+                            Pos2::new(ro_rect.left() + 20.0, ro_rect.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            readonly_lbl,
+                            FontId::proportional(11.0),
+                            fg,
+                        );
+                        if driver_online && ro_resp.clicked() {
+                            core.lock()
+                                .unwrap()
+                                .send_ipc(IpcCommand::SetReadOnly { enabled: !read_only_on });
+                        }
+                        ro_resp.on_hover_text(readonly_hint);
+                    });
+                },
+            );
+        });
+
+    ui.add_space(10.0);
     paint_divider(ui, pal);
-    ui.add_space(12.0);
+    ui.add_space(10.0);
 
     ui.horizontal(|ui| {
         ui.label(
@@ -443,8 +603,8 @@ pub(crate) fn render_left_column(
         ),
     ];
 
-    let gap_y = 6.0;
-    let card_h = ((ui.available_height() - gap_y * 4.0) / 5.0).clamp(48.0, 53.0);
+    let gap_y = 5.0;
+    let card_h = ((ui.available_height() - gap_y * 4.0) / 5.0).clamp(42.0, 52.0);
     for (idx, (key, ic, tk, dk)) in rows.iter().enumerate() {
         let selected = active_panel == *key;
         let (title, desc) = {

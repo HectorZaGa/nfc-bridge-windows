@@ -60,25 +60,15 @@ pub fn run_desktop_app(spec: DesktopLaunchSpec, config: AppConfig) -> Result<()>
         std::thread::sleep(std::time::Duration::from_millis(150));
     }
 
-    #[cfg(feature = "headless-http")]
-    let headless = std::env::args().any(|a| a == "--headless");
-    #[cfg(not(feature = "headless-http"))]
-    let headless = false;
-
     let local_ip = local_outbound_ip();
     info!(
-        "{} v{} ({}) | IP={} | PC={} | Portable={} | Modo={}",
+        "{} v{} ({}) | IP={} | PC={} | Portable={} | Modo=desktop-native",
         spec.display_name,
         spec.version,
         spec.build_id,
         local_ip,
         config.pc_name,
-        config.is_portable,
-        if headless {
-            "headless-http"
-        } else {
-            "desktop-native"
-        }
+        config.is_portable
     );
     info!("Directorio de datos: {:?}", config.data_dir);
 
@@ -102,22 +92,9 @@ pub fn run_desktop_app(spec: DesktopLaunchSpec, config: AppConfig) -> Result<()>
     let rt_handle = rt.handle().clone();
     let ipc_for_ui = ipc_client.clone();
     let upd_for_ui = updater.clone();
-    let data_dir = config.data_dir.clone();
 
-    let runtime_handle = std::thread::spawn(move || {
+    let _runtime_handle = std::thread::spawn(move || {
         rt.block_on(async move {
-            #[cfg(feature = "headless-http")]
-            if headless {
-                let ui_server = crate::ui_http::DesktopUiServer::with_updater(
-                    ipc_client.clone(),
-                    updater.clone(),
-                    crate::ui_http::DEFAULT_UI_HTTP_PORT,
-                );
-                tokio::spawn(async move {
-                    ui_server.run().await;
-                });
-            }
-
             {
                 let updater_init = updater.clone();
                 let ipc_init = ipc_client.clone();
@@ -138,19 +115,29 @@ pub fn run_desktop_app(spec: DesktopLaunchSpec, config: AppConfig) -> Result<()>
         });
     });
 
-    if headless {
-        let _ = runtime_handle.join();
-        return Ok(());
+    let force_open_ui = std::env::args().any(|a| a == "--open-ui");
+    let start_minimized = std::env::args().any(|a| a == "--minimized" || a == "--background");
+    let initial_visible = force_open_ui || !start_minimized;
+
+    if spec.product_slug == "sync" {
+        if config.autostart_with_windows
+            && !crate::platform::is_windows_autostart_enabled("NfcBridgeSync")
+        {
+            let _ = crate::platform::set_windows_autostart("NfcBridgeSync", true);
+        }
     }
 
     #[cfg(target_os = "windows")]
     crate::ui::run_desktop_ui(
+        spec.product_slug,
         spec.display_name,
         spec.app_ico_bytes,
         ipc_for_ui,
         upd_for_ui,
         rt_handle,
-        data_dir,
+        config,
+        initial_visible,
+        force_open_ui,
     )?;
 
     Ok(())

@@ -30,6 +30,7 @@ pub enum IpcCommand {
     IssuePairingToken { method: String },
     SetRelayUrl { url: Option<String> },
     SetPaused { paused: bool },
+    SetReadOnly { enabled: bool },
     SetUsbPriority { enabled: bool },
     SetUsbEnabled { enabled: bool },
     SetTcpEnabled { enabled: bool },
@@ -56,8 +57,14 @@ pub enum IpcEvent {
         device_name: Option<String>,
         latency_ms: u64,
         paused: bool,
+        #[serde(default)]
+        pause_reason: Option<String>,
         tag_present: bool,
         tag_uid: Option<String>,
+        #[serde(default)]
+        tag_technologies: Vec<String>,
+        #[serde(default)]
+        read_only_mode: bool,
         #[serde(default)]
         transport: Option<String>,
         #[serde(default)]
@@ -111,6 +118,8 @@ pub enum IpcEvent {
         tcp_ip_override: Option<String>,
         #[serde(default)]
         auto_accept_mobile_switch: bool,
+        #[serde(default)]
+        read_only_mode: bool,
         #[serde(default)]
         trusted_devices: Vec<TrustedDeviceInfo>,
         #[serde(default = "default_true")]
@@ -194,6 +203,7 @@ pub struct TransportSnapshotData {
     pub driver_build_id: Option<String>,
     pub tcp_ip_override: Option<String>,
     pub auto_accept_mobile_switch: bool,
+    pub read_only_mode: bool,
     pub trusted_devices: Vec<TrustedDeviceInfo>,
     pub network_online: bool,
 }
@@ -276,6 +286,7 @@ impl Default for TransportSnapshotData {
             driver_build_id: None,
             tcp_ip_override: None,
             auto_accept_mobile_switch: false,
+            read_only_mode: false,
             trusted_devices: Vec::new(),
             network_online: true,
         }
@@ -303,8 +314,10 @@ pub struct DesktopLiveState {
     pub last_device_os: Option<String>,
     pub latency_ms: u64,
     pub paused: bool,
+    pub pause_reason: Option<String>,
     pub tag_present: bool,
     pub tag_uid: Option<String>,
+    pub tag_technologies: Vec<String>,
     pub ui_settings: SyncUiSettings,
     pub windows_accent_hex: String,
     pub pending_mobile_switch: Option<PendingMobileSwitchState>,
@@ -334,8 +347,10 @@ impl Default for DesktopLiveState {
             last_device_os: None,
             latency_ms: 0,
             paused: false,
+            pause_reason: None,
             tag_present: false,
             tag_uid: None,
+            tag_technologies: Vec::new(),
             ui_settings: load_ui_settings(),
             windows_accent_hex: read_windows_accent_hex(),
             pending_mobile_switch: None,

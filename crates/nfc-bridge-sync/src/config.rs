@@ -142,22 +142,10 @@ pub fn ui_settings_path() -> PathBuf {
     installed_app_data_dir().join("sync_ui_settings.json")
 }
 
-/// Diccionarios de internacionalización incrustados (únicamente ~22 KB frente a los 262 KB del HTML legado).
+/// Diccionarios de internacionalización incrustados (únicamente ~22 KB).
 pub struct EmbeddedI18n;
 
 impl EmbeddedI18n {
     pub const EN_JSON: &'static str = include_str!("../ui/i18n/en.json");
     pub const ES_JSON: &'static str = include_str!("../ui/i18n/es.json");
-}
-
-#[cfg(feature = "headless-http")]
-pub struct EmbeddedUi;
-
-#[cfg(feature = "headless-http")]
-impl EmbeddedUi {
-    pub const INDEX_HTML: &'static str = include_str!("../ui/index.html");
-    pub const TRAY_HTML: &'static str = include_str!("../ui/tray.html");
-    pub const CASES_HTML: &'static str = include_str!("../ui/cases.html");
-    pub const EN_I18N_JSON: &'static str = EmbeddedI18n::EN_JSON;
-    pub const ES_I18N_JSON: &'static str = EmbeddedI18n::ES_JSON;
 }

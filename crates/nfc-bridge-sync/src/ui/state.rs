@@ -33,7 +33,10 @@ pub(crate) struct SharedUiCore {
     pub(crate) updater: DesktopUpdater,
     pub(crate) rt: tokio::runtime::Handle,
     pub(crate) i18n: I18nCatalog,
+    pub(crate) product_slug: String,
     pub(crate) app_title: String,
+    pub(crate) app_config: crate::AppConfig,
+    pub(crate) autostart_enabled: bool,
 
     pub(crate) live: DesktopLiveState,
     pub(crate) updates: UpdatesOverviewState,
@@ -119,6 +122,15 @@ impl SharedUiCore {
         &self.live.ui_settings.language
     }
 
+    pub(crate) fn paused_reason_key(reason: Option<&str>) -> &'static str {
+        match reason.map(|r| r.trim().to_ascii_lowercase()).as_deref() {
+            Some("minimized") => "device_reader_paused_minimized",
+            Some("screen_locked") => "device_reader_paused_locked",
+            Some("nfc_disabled") => "device_reader_paused_nfc",
+            _ => "device_reader_paused",
+        }
+    }
+
     pub(crate) fn t<'a>(&'a self, key: &'a str) -> &'a str {
         self.i18n.t(self.current_lang(), key)
     }
@@ -187,7 +199,15 @@ impl SharedUiCore {
             IpcCommand::SetTcpEnabled { enabled } => self.live.snapshot.tcp_enabled = *enabled,
             IpcCommand::SetBluetoothEnabled { enabled } => self.live.snapshot.bt_enabled = *enabled,
             IpcCommand::SetWifiDirectEnabled { enabled } => self.live.snapshot.wfd_enabled = *enabled,
-            IpcCommand::SetPaused { paused } => self.live.paused = *paused,
+            IpcCommand::SetPaused { paused } => {
+                self.live.paused = *paused;
+                self.live.pause_reason = if *paused {
+                    Some("manual".to_string())
+                } else {
+                    None
+                };
+            }
+            IpcCommand::SetReadOnly { enabled } => self.live.snapshot.read_only_mode = *enabled,
             IpcCommand::SetAutoAcceptMobileSwitch { enabled } => {
                 self.live.snapshot.auto_accept_mobile_switch = *enabled;
             }

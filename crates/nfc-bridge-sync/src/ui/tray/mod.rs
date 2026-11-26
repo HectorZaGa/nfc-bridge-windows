@@ -28,9 +28,9 @@ pub(crate) fn estimate_tray_height(g: &SharedUiCore) -> f32 {
         }
     }
     if has_multi {
-        349.0_f32
+        417.0_f32
     } else {
-        315.0_f32
+        383.0_f32
     }
 }
 
@@ -201,6 +201,10 @@ pub(crate) fn render_tray_viewport(
         qr_lbl,
         paused,
         pause_lbl,
+        read_only_on,
+        read_only_lbl,
+        usb_en,
+        usb_en_lbl,
         usb_prio,
         usb_lbl,
         opt_lbl,
@@ -261,7 +265,8 @@ pub(crate) fn render_tray_viewport(
                 None,
                 None,
                 None,
-                g.t("device_reader_paused").to_string(),
+                g.t(SharedUiCore::paused_reason_key(st.pause_reason.as_deref()))
+                    .to_string(),
             )
         } else if st.connected {
             let os = st
@@ -311,6 +316,8 @@ pub(crate) fn render_tray_viewport(
 
         let multi = st.snapshot.trusted_devices.len() > 1;
         let paused_val = st.paused;
+        let read_only_val = st.snapshot.read_only_mode;
+        let usb_en_val = st.snapshot.usb_enabled;
         let usb_prio_val = st.snapshot.usb_auto_connect;
         let conn_val = st.connected;
         (
@@ -334,6 +341,10 @@ pub(crate) fn render_tray_viewport(
                 "tray_pause_reader"
             })
             .to_string(),
+            read_only_val,
+            g.t("tray_read_only").to_string(),
+            usb_en_val,
+            g.t("tray_usb_bridge").to_string(),
             usb_prio_val,
             g.t("tray_usb_priority").to_string(),
             g.t("tray_options").to_string(),
@@ -550,6 +561,62 @@ pub(crate) fn render_tray_viewport(
                     core.lock()
                         .unwrap()
                         .send_ipc(IpcCommand::SetPaused { paused: !paused });
+                }
+
+                let ro_right = if read_only_on {
+                    Some((glyph::CHECK, pal.amber_pause))
+                } else {
+                    None
+                };
+                let ro_r = tray_menu_item(
+                    ui,
+                    &pal,
+                    glyph::TUNE,
+                    if read_only_on {
+                        pal.amber_pause
+                    } else {
+                        pal.on_surface_muted
+                    },
+                    &read_only_lbl,
+                    pal.on_surface,
+                    false,
+                    ro_right,
+                    false,
+                    false,
+                );
+                if ro_r.hovered {
+                    hovered_other_item = true;
+                }
+                if ro_r.clicked {
+                    core.lock().unwrap().send_ipc(IpcCommand::SetReadOnly {
+                        enabled: !read_only_on,
+                    });
+                }
+
+                let usb_en_right = if usb_en {
+                    Some((glyph::CHECK, pal.accent))
+                } else {
+                    None
+                };
+                let usb_en_r = tray_menu_item(
+                    ui,
+                    &pal,
+                    if usb_en { glyph::CABLE } else { glyph::USB_OFF },
+                    pal.on_surface_muted,
+                    &usb_en_lbl,
+                    pal.on_surface,
+                    false,
+                    usb_en_right,
+                    false,
+                    false,
+                );
+                if usb_en_r.hovered {
+                    hovered_other_item = true;
+                }
+                if usb_en_r.clicked {
+                    core.lock().unwrap().send_ipc(IpcCommand::SetUsbEnabled {
+                        enabled: !usb_en,
+                    });
                 }
 
                 let usb_right = if usb_prio {

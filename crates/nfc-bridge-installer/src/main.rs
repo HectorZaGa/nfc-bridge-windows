@@ -88,17 +88,10 @@ fn run_hidden(program: &str, args: &[&str]) -> bool {
 }
 
 fn install_dir(meta: &ProductMeta) -> PathBuf {
-    if meta.service_driver {
-        let base = std::env::var_os("ProgramFiles")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
-        base.join("NFC Bridge").join(meta.folder_name)
-    } else {
-        let base = std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir);
-        base.join("Programs").join("NFC Bridge").join(meta.folder_name)
-    }
+    let base = std::env::var_os("ProgramFiles")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+    base.join("NFC Bridge").join(meta.folder_name)
 }
 
 fn stop_running_processes(meta: &ProductMeta) {
@@ -159,11 +152,7 @@ fn create_shortcut(lnk_path: &Path, target_exe: &Path, args: &str) {
 }
 
 fn register_uninstall_entry(meta: &ProductMeta, dir: &Path, uninstaller_exe: &Path, target_exe: &Path) {
-    let hive_key = if meta.service_driver {
-        format!(r"HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", meta.reg_key_name)
-    } else {
-        format!(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", meta.reg_key_name)
-    };
+    let hive_key = format!(r"HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", meta.reg_key_name);
     let uninstall_ico = dir.join("uninstall.ico");
     let icon = if uninstall_ico.exists() {
         uninstall_ico.to_string_lossy().to_string()
@@ -190,11 +179,7 @@ fn register_uninstall_entry(meta: &ProductMeta, dir: &Path, uninstaller_exe: &Pa
 }
 
 fn unregister_uninstall_entry(meta: &ProductMeta) {
-    let hive_key = if meta.service_driver {
-        format!(r"HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", meta.reg_key_name)
-    } else {
-        format!(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", meta.reg_key_name)
-    };
+    let hive_key = format!(r"HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", meta.reg_key_name);
     let _ = run_hidden("reg", &["delete", &hive_key, "/f"]);
 }
 
