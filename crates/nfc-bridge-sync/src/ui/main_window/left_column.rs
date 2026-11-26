@@ -158,18 +158,27 @@ pub(crate) fn render_left_column(
             let full_w = ui.available_width();
             ui.horizontal(|ui| {
                 let left_btn_w = (full_w - 122.0).max(150.0);
-                let (sel_rect, sel_resp) = ui.allocate_exact_size(
+                let (sel_rect, _) = ui.allocate_exact_size(
                     Vec2::new(left_btn_w, 42.0),
+                    Sense::hover(),
+                );
+                let hover_rect = egui::Rect::from_min_max(
+                    sel_rect.min - Vec2::new(6.0, 4.0),
+                    Pos2::new(sel_rect.right() + 3.0, sel_rect.bottom() + 4.0),
+                );
+                let sel_resp = ui.interact(
+                    hover_rect,
+                    egui::Id::unique("active_dev_dd_btn"),
                     if has_dropdown {
                         Sense::click()
                     } else {
                         Sense::hover()
                     },
                 );
-                sel_btn_rect = sel_rect;
+                sel_btn_rect = hover_rect;
                 if has_dropdown && sel_resp.hovered() {
                     ui.painter()
-                        .rect_filled(sel_rect, CornerRadius::same(8), pal.surface_elevated);
+                        .rect_filled(hover_rect, CornerRadius::same(8), pal.surface_elevated);
                 }
 
                 let icon_box = Rect::from_min_size(

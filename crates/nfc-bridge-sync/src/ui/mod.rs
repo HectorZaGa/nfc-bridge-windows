@@ -46,8 +46,9 @@ pub fn run_desktop_ui(
         width: 32,
         height: 32,
     };
-    let tray_handle = tray_icon::Icon::from_rgba(rgba_32, 32, 32)
+    let tray_handle = tray_icon::Icon::from_resource(2, Some((32, 32)))
         .ok()
+        .or_else(|| tray_icon::Icon::from_rgba(rgba_32, 32, 32).ok())
         .and_then(|ic| {
             TrayIconBuilder::new()
                 .with_tooltip(app_title)
@@ -87,6 +88,7 @@ pub fn run_desktop_ui(
         main_visible: true,
         main_want_focus: false,
         options_open: false,
+        options_just_opened: false,
         options_want_focus: false,
         tray_open: false,
         tray_opened_at: None,
@@ -108,6 +110,7 @@ pub fn run_desktop_ui(
         net_dirty_until: None,
         net_feedback: None,
         ui_settings_dirty_until: None,
+        snapshot_dirty_until: None,
         auto_mobile_dirty_until: None,
         color_picker_open: false,
         color_picker_anchor: Pos2::new(420.0, 220.0),
@@ -189,12 +192,17 @@ fn spawn_state_sync_loop(
     ipc_bg: DriverIpcClient,
     upd_bg: DesktopUpdater,
 ) {
+    let notify = ipc_bg.notifier();
     rt_handle.spawn(async move {
         let mut last_live = None;
         let mut last_upd = None;
         loop {
-            tokio::time::sleep(Duration::from_millis(350)).await;
-            let _ = ipc_bg.send_command(IpcCommand::GetTransportSnapshot).await;
+            tokio::select! {
+                _ = notify.notified() => {}
+                _ = tokio::time::sleep(Duration::from_millis(1200)) => {
+                    let _ = ipc_bg.send_command(IpcCommand::GetTransportSnapshot).await;
+                }
+            }
             let st = ipc_bg.get_live_state().await;
             upd_bg
                 .set_known_driver_version(st.snapshot.driver_version.clone())
@@ -214,8 +222,22 @@ fn spawn_state_sync_loop(
                 let keep_ui_settings = guard
                     .ui_settings_dirty_until
                     .is_some_and(|t| now < t);
+                let keep_snapshot = guard.snapshot_dirty_until.is_some_and(|t| now < t);
                 let saved_ui = if keep_ui_settings {
                     Some(guard.live.ui_settings.clone())
+                } else {
+                    None
+                };
+                let saved_toggles = if keep_snapshot {
+                    Some((
+                        guard.live.paused,
+                        guard.live.snapshot.usb_enabled,
+                        guard.live.snapshot.usb_auto_connect,
+                        guard.live.snapshot.tcp_enabled,
+                        guard.live.snapshot.bt_enabled,
+                        guard.live.snapshot.wfd_enabled,
+                        guard.live.snapshot.auto_accept_mobile_switch,
+                    ))
                 } else {
                     None
                 };
@@ -224,6 +246,15 @@ fn spawn_state_sync_loop(
                     guard.live.ui_settings = prev;
                 } else {
                     guard.sidebar_compact = guard.live.ui_settings.settings_sidebar_compact;
+                }
+                if let Some((p, ue, ua, te, be, we, am)) = saved_toggles {
+                    guard.live.paused = p;
+                    guard.live.snapshot.usb_enabled = ue;
+                    guard.live.snapshot.usb_auto_connect = ua;
+                    guard.live.snapshot.tcp_enabled = te;
+                    guard.live.snapshot.bt_enabled = be;
+                    guard.live.snapshot.wfd_enabled = we;
+                    guard.live.snapshot.auto_accept_mobile_switch = am;
                 }
                 guard.updates = upd;
 
@@ -313,6 +344,7 @@ impl eframe::App for NfcBridgeEguiApp {
             main_title,
             pal,
             options_open,
+            options_just_opened,
             options_want_focus,
             tray_open,
             tray_pos,
@@ -336,6 +368,8 @@ impl eframe::App for NfcBridgeEguiApp {
 
             let wf = g.main_want_focus;
             g.main_want_focus = false;
+            let ojo = g.options_just_opened;
+            g.options_just_opened = false;
             let owf = g.options_want_focus;
             g.options_want_focus = false;
 
@@ -345,6 +379,7 @@ impl eframe::App for NfcBridgeEguiApp {
                 g.app_title.clone(),
                 pal,
                 g.options_open,
+                ojo,
                 owf,
                 g.tray_open,
                 g.tray_pos,
@@ -393,10 +428,12 @@ impl eframe::App for NfcBridgeEguiApp {
                 .with_decorations(false)
                 .with_resizable(false)
                 .with_transparent(false);
-            if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
-                let x = outer.center().x - 340.0;
-                let y = outer.center().y - 234.0;
-                vb = vb.with_position(Pos2::new(x.max(20.0), y.max(20.0)));
+            if options_just_opened {
+                if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
+                    let x = outer.center().x - 340.0;
+                    let y = outer.center().y - 234.0;
+                    vb = vb.with_position(Pos2::new(x.max(20.0), y.max(20.0)));
+                }
             }
             if options_want_focus {
                 ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Focus);

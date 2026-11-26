@@ -9,7 +9,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify, RwLock};
 use tracing::{info, warn};
 
 #[derive(Clone)]
@@ -17,6 +17,7 @@ pub struct DriverIpcClient {
     state: Arc<RwLock<DesktopLiveState>>,
     cmd_tx: Arc<Mutex<Option<mpsc::Sender<IpcCommand>>>>,
     pending_qr_waiter: Arc<Mutex<Option<oneshot::Sender<IssuedQrData>>>>,
+    state_notify: Arc<Notify>,
 }
 
 impl Default for DriverIpcClient {
@@ -31,7 +32,12 @@ impl DriverIpcClient {
             state: Arc::new(RwLock::new(DesktopLiveState::default())),
             cmd_tx: Arc::new(Mutex::new(None)),
             pending_qr_waiter: Arc::new(Mutex::new(None)),
+            state_notify: Arc::new(Notify::new()),
         }
+    }
+
+    pub fn notifier(&self) -> Arc<Notify> {
+        self.state_notify.clone()
     }
 
     pub async fn get_live_state(&self) -> DesktopLiveState {
@@ -300,6 +306,7 @@ impl DriverIpcClient {
                             Ok(Some(line)) => {
                                 if let Ok(event) = serde_json::from_str::<IpcEvent>(&line) {
                                     self.handle_driver_event(event).await;
+                                    self.state_notify.notify_one();
                                 }
                             }
                             _ => break,

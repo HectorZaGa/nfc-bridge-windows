@@ -1,7 +1,7 @@
 //! Iconos vectoriales y fuente Material Symbols Outlined incrustada (13 KB offline)
 //! para la interfaz nativa `egui` de NFC Bridge Sync y Tools Desktop.
 
-use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Pos2, Rect, RichText, Stroke};
+use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Pos2, Rect, RichText, Stroke, Vec2};
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -191,32 +191,26 @@ pub fn paint_refresh_spin(
     angle: f32,
     color: Color32,
 ) {
-    let segs = 18usize;
-    let sweep = std::f32::consts::PI * 1.48;
+    let segs = 20usize;
+    let start_a = angle + std::f32::consts::FRAC_PI_4;
+    let sweep = std::f32::consts::PI * 1.50;
     let mut pts = Vec::with_capacity(segs + 1);
     for i in 0..=segs {
-        let a = angle - std::f32::consts::FRAC_PI_4 + sweep * (i as f32 / segs as f32);
+        let a = start_a + sweep * (i as f32 / segs as f32);
         pts.push(Pos2::new(
             center.x + a.cos() * radius,
             center.y + a.sin() * radius,
         ));
     }
-    painter.add(egui::Shape::line(pts, Stroke::new(1.5, color)));
-    let tip_a = angle - std::f32::consts::FRAC_PI_4 + sweep;
-    let tip = Pos2::new(
-        center.x + tip_a.cos() * radius,
-        center.y + tip_a.sin() * radius,
-    );
-    let back1_a = tip_a - 0.55;
-    let back2_a = tip_a + 0.35;
-    let p1 = Pos2::new(
-        center.x + back1_a.cos() * (radius * 0.55),
-        center.y + back1_a.sin() * (radius * 0.55),
-    );
-    let p2 = Pos2::new(
-        center.x + back2_a.cos() * (radius * 1.25),
-        center.y + back2_a.sin() * (radius * 1.25),
-    );
+    painter.add(egui::Shape::line(pts, Stroke::new(1.45, color)));
+
+    let tip_a = start_a + sweep;
+    let norm = Vec2::new(tip_a.cos(), tip_a.sin());
+    let dir = Vec2::new(-tip_a.sin(), tip_a.cos());
+    let tip = center + norm * radius + dir * 2.0;
+    let base = center + norm * radius - dir * 1.3;
+    let p1 = base - norm * 2.35;
+    let p2 = base + norm * 2.35;
     painter.add(egui::Shape::convex_polygon(
         vec![tip, p1, p2],
         color,

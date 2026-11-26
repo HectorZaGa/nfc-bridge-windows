@@ -1,5 +1,5 @@
 use super::super::theme::ThemePalette;
-use egui::{Align, Color32, CornerRadius, FontId, Layout, Sense, Stroke, StrokeKind, Vec2};
+use egui::{Align, Color32, CornerRadius, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Vec2};
 
 pub(crate) fn styled_singleline_input(
     ui: &mut egui::Ui,
@@ -11,7 +11,12 @@ pub(crate) fn styled_singleline_input(
 ) -> egui::Response {
     let (box_r, _) = ui.allocate_exact_size(Vec2::new(w, h), Sense::hover());
     let mut inner_resp: Option<egui::Response> = None;
-    let text_rect = box_r.shrink2(Vec2::new(10.0, 2.0));
+    let mono = FontId::monospace(12.0);
+    let row_h = ui.fonts_mut(|f| f.row_height(&mono)).ceil().clamp(14.0, h - 4.0);
+    let text_rect = Rect::from_center_size(
+        box_r.center(),
+        Vec2::new((box_r.width() - 20.0).max(20.0), row_h),
+    );
     ui.painter().rect(
         box_r,
         CornerRadius::same(8),
@@ -19,17 +24,25 @@ pub(crate) fn styled_singleline_input(
         Stroke::new(1.0, pal.outline),
         StrokeKind::Inside,
     );
+    let hint_col = if pal.is_dark {
+        Color32::from_rgb(156, 163, 175)
+    } else {
+        pal.on_surface_muted
+    };
     ui.scope_builder(
         egui::UiBuilder::new()
             .max_rect(text_rect)
             .layout(Layout::left_to_right(Align::Center)),
         |ui| {
+            ui.spacing_mut().item_spacing = Vec2::ZERO;
             let te = ui.add_sized(
-                Vec2::new(text_rect.width(), 20.0),
+                Vec2::new(text_rect.width(), row_h),
                 egui::TextEdit::singleline(buf)
                     .frame(egui::Frame::NONE)
-                    .font(FontId::monospace(12.0))
-                    .hint_text(hint)
+                    .margin(Margin::ZERO)
+                    .font(mono.clone())
+                    .text_color(pal.on_surface)
+                    .hint_text(RichText::new(hint).font(mono).color(hint_col))
                     .clip_text(true),
             );
             if te.has_focus() {

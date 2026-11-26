@@ -1,5 +1,16 @@
+use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+pub struct Win32ResourceSpec<'a> {
+    pub prefix: &'a str,
+    pub bin_name: &'a str,
+    pub title: &'a str,
+    pub desc: &'a str,
+    pub orig_name: &'a str,
+    pub app_ico_path: Option<&'a str>,
+    pub tray_ico_path: Option<&'a str>,
+}
 
 pub fn emit_build_env_and_resources(
     prefix: &str,
@@ -8,6 +19,18 @@ pub fn emit_build_env_and_resources(
     desc: &str,
     orig_name: &str,
 ) {
+    emit_build_with_icons(Win32ResourceSpec {
+        prefix,
+        bin_name,
+        title,
+        desc,
+        orig_name,
+        app_ico_path: None,
+        tray_ico_path: None,
+    });
+}
+
+pub fn emit_build_with_icons(spec: Win32ResourceSpec<'_>) {
     let git_sha = git_out(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "nogit".to_string());
     let git_rev = git_out(&["rev-list", "--count", "HEAD"]).unwrap_or_else(|| "0".to_string());
     let secs = SystemTime::now()
@@ -20,12 +43,12 @@ pub fn emit_build_env_and_resources(
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| format!("{}{}-{}-{}", prefix, git_rev, git_sha, ts));
+        .unwrap_or_else(|| format!("{}{}-{}-{}", spec.prefix, git_rev, git_sha, ts));
 
     println!("cargo:rustc-env=NFC_BRIDGE_GIT_SHA={}", git_sha);
     println!("cargo:rustc-env=NFC_BRIDGE_BUILD_ID={}", build_id);
 
-    emit_win32_exe_resources(bin_name, title, desc, orig_name);
+    emit_win32_exe_resources(&spec);
 }
 
 fn utc_compact_from_unix(secs: u64) -> String {
@@ -66,7 +89,21 @@ fn git_out(args: &[&str]) -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
 }
 
-fn emit_win32_exe_resources(bin_name: &str, title: &str, desc: &str, orig_name: &str) {
+pub fn load_ico_or_fallback(custom_path: Option<&str>, accent_bgra: [u8; 4]) -> Vec<u8> {
+    if let Some(p) = custom_path {
+        let path = Path::new(p);
+        if path.exists() {
+            if let Ok(bytes) = std::fs::read(path) {
+                if bytes.len() >= 22 {
+                    return bytes;
+                }
+            }
+        }
+    }
+    build_ico_bytes(accent_bgra)
+}
+
+fn emit_win32_exe_resources(spec: &Win32ResourceSpec<'_>) {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
     }
@@ -86,16 +123,39 @@ fn emit_win32_exe_resources(bin_name: &str, title: &str, desc: &str, orig_name: 
         parts.get(2).copied().unwrap_or(0),
     );
 
+    let app_bgra = if spec.bin_name.contains("tools") {
+        [212, 182, 6, 255] // #06B6D4 cyan para diferenciar Tools
+    } else if spec.bin_name.contains("driver") {
+        [129, 185, 16, 255] // #10B981 emerald para Driver
+    } else {
+        [246, 130, 59, 255] // #3B82F6 blue para Sync
+    };
+
     let ico_path = out_dir.join("app.ico");
+    let tray_ico_path = out_dir.join("tray.ico");
     let rc_path = out_dir.join("app.rc");
     let res_path = out_dir.join("app.res");
 
-    if std::fs::write(&ico_path, build_ico_bytes()).is_err() {
+    if std::fs::write(&ico_path, load_ico_or_fallback(spec.app_ico_path, app_bgra)).is_err() {
         return;
     }
+
+    let mut tray_rc_line = String::new();
+    if let Some(tp) = spec.tray_ico_path {
+        let tray_bytes = load_ico_or_fallback(Some(tp), app_bgra);
+        if std::fs::write(&tray_ico_path, tray_bytes).is_ok() {
+            tray_rc_line = "2 ICON \"tray.ico\"\n".to_string();
+        }
+    }
+
+    let bin_name = spec.bin_name;
+    let title = spec.title;
+    let desc = spec.desc;
+    let orig_name = spec.orig_name;
+
     let rc_content = format!(
         r#"1 ICON "app.ico"
-1 VERSIONINFO
+{tray_rc_line}1 VERSIONINFO
 FILEVERSION {v0},{v1},{v2},0
 PRODUCTVERSION {v0},{v1},{v2},0
 FILEFLAGSMASK 0x3fL
@@ -139,7 +199,7 @@ END
     }
 }
 
-fn build_ico_bytes() -> Vec<u8> {
+pub fn build_ico_bytes(accent_bgra: [u8; 4]) -> Vec<u8> {
     let size = 32usize;
     let dib_size = 40 + size * size * 4 + size * 4;
     let mut buf = Vec::with_capacity(6 + 16 + dib_size);
@@ -185,7 +245,7 @@ fn build_ico_bytes() -> Vec<u8> {
                 if in_arc || in_dot {
                     buf.extend_from_slice(&[255, 255, 255, 255]);
                 } else {
-                    buf.extend_from_slice(&[246, 130, 59, 255]);
+                    buf.extend_from_slice(&accent_bgra);
                 }
             }
         }

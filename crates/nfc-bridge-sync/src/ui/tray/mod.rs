@@ -356,6 +356,7 @@ pub(crate) fn render_tray_viewport(
                 let mut g = core.lock().unwrap();
                 g.tray_open = false;
                 g.options_open = true;
+                g.options_just_opened = true;
                 g.options_want_focus = true;
             }
 

@@ -59,8 +59,8 @@ pub(crate) fn render_main_viewport(
             ui.spacing_mut().item_spacing = Vec2::ZERO;
 
             // 1) Custom Frameless Titlebar (48 px)
-            let (titlebar_rect, titlebar_resp) =
-                ui.allocate_exact_size(Vec2::new(ui.available_width(), 48.0), Sense::click_and_drag());
+            let (titlebar_rect, _) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 48.0), Sense::hover());
             ui.painter()
                 .rect_filled(titlebar_rect, CornerRadius::ZERO, pal.surface_card);
             ui.painter().line_segment(
@@ -149,13 +149,17 @@ pub(crate) fn render_main_viewport(
             let opt_rect =
                 Rect::from_center_size(Pos2::new(min_rect.left() - 20.0, cy), Vec2::splat(32.0));
 
+            let drag_rect = Rect::from_min_max(
+                titlebar_rect.min,
+                Pos2::new(opt_rect.left() - 6.0, titlebar_rect.bottom()),
+            );
+            let titlebar_resp = ui.interact(drag_rect, Id::unique("tb_drag"), Sense::drag());
+
             let opt_resp = ui.interact(opt_rect, Id::unique("tb_opt"), Sense::click());
             let min_resp = ui.interact(min_rect, Id::unique("tb_min"), Sense::click());
             let close_resp = ui.interact(close_rect, Id::unique("tb_close"), Sense::click());
 
-            let hovering_chrome =
-                opt_resp.hovered() || min_resp.hovered() || close_resp.hovered();
-            if titlebar_resp.drag_started() && !hovering_chrome {
+            if titlebar_resp.drag_started() {
                 ctx.send_viewport_cmd(ViewportCommand::StartDrag);
             }
 
@@ -169,6 +173,7 @@ pub(crate) fn render_main_viewport(
             if opt_resp.clicked() {
                 let mut g = core.lock().unwrap();
                 g.options_open = true;
+                g.options_just_opened = true;
                 g.options_want_focus = true;
             }
             if min_resp.clicked() {

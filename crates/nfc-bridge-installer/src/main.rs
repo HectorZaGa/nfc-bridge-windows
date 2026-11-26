@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 static PAYLOAD_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/payload.bin"));
+static UNINSTALL_ICON_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/uninstall.ico"));
 const PRODUCT_SLUG: &str = env!("NFC_INSTALLER_PRODUCT");
 const PRODUCT_VERSION: &str = env!("NFC_INSTALLER_VERSION");
 
@@ -62,7 +63,7 @@ fn show_msg(title: &str, text: &str, yes_no: bool, is_error: bool) -> bool {
             MB_OK | MB_ICONINFORMATION
         };
         let res = unsafe { MessageBoxW(std::ptr::null_mut(), m_wide.as_ptr(), t_wide.as_ptr(), flags) };
-        return res == IDYES;
+        res == IDYES
     }
     #[cfg(not(windows))]
     {
@@ -159,8 +160,13 @@ fn register_uninstall_entry(meta: &ProductMeta, dir: &Path, uninstaller_exe: &Pa
     } else {
         format!(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{}", meta.reg_key_name)
     };
+    let uninstall_ico = dir.join("uninstall.ico");
+    let icon = if uninstall_ico.exists() {
+        uninstall_ico.to_string_lossy().to_string()
+    } else {
+        format!("{},0", target_exe.display())
+    };
     let uninst_cmd = format!("\"{}\" --uninstall", uninstaller_exe.display());
-    let icon = format!("{},0", target_exe.display());
     let dir_str = dir.to_string_lossy().to_string();
 
     let entries = [
@@ -218,6 +224,9 @@ fn run_install(meta: ProductMeta, silent: bool, auto_relaunch: bool) -> Result<(
         if self_exe != uninstaller_exe {
             let _ = std::fs::copy(&self_exe, &uninstaller_exe);
         }
+    }
+    if !UNINSTALL_ICON_BYTES.is_empty() {
+        let _ = std::fs::write(dir.join("uninstall.ico"), UNINSTALL_ICON_BYTES);
     }
 
     if meta.service_driver {

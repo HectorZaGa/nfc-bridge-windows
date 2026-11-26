@@ -63,58 +63,53 @@ pub(crate) fn render_opt_updates(
         )
     };
 
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(hdr).size(12.0).color(pal.on_surface_muted));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let gal = ui.painter().layout_no_wrap(
-                check_lbl.clone(),
-                FontId::proportional(11.0),
-                pal.accent,
+    super::options_section_header(ui, pal, &hdr, |ui| {
+        let gal = ui.painter().layout_no_wrap(
+            check_lbl.clone(),
+            FontId::proportional(11.0),
+            pal.accent,
+        );
+        let w = gal.size().x + 17.0;
+        let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 22.0), Sense::click());
+        let ang = if spin_active {
+            ui.ctx().request_repaint();
+            (ui.input(|i| i.time) * 6.5) as f32
+        } else {
+            0.0
+        };
+        paint_refresh_spin(
+            ui.painter(),
+            Pos2::new(r.left() + 6.0, r.center().y),
+            4.5,
+            ang,
+            pal.accent,
+        );
+        ui.painter().galley(
+            Pos2::new(r.left() + 15.0, r.center().y - gal.size().y * 0.5),
+            gal,
+            pal.accent,
+        );
+        if resp.hovered() {
+            ui.painter().line_segment(
+                [
+                    Pos2::new(r.left() + 15.0, r.center().y + 7.0),
+                    Pos2::new(r.right() - 2.0, r.center().y + 7.0),
+                ],
+                Stroke::new(1.0, pal.accent),
             );
-            let w = gal.size().x + 20.0;
-            let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 22.0), Sense::click());
-            let ang = if spin_active {
-                ui.ctx().request_repaint();
-                (ui.input(|i| i.time) * 6.5) as f32
-            } else {
-                0.0
-            };
-            paint_refresh_spin(
-                ui.painter(),
-                Pos2::new(r.left() + 7.0, r.center().y),
-                5.0,
-                ang,
-                pal.accent,
-            );
-            ui.painter().galley(
-                Pos2::new(r.left() + 18.0, r.center().y - gal.size().y * 0.5),
-                gal,
-                pal.accent,
-            );
-            if resp.hovered() {
-                ui.painter().line_segment(
-                    [
-                        Pos2::new(r.left() + 18.0, r.center().y + 7.0),
-                        Pos2::new(r.right() - 2.0, r.center().y + 7.0),
-                    ],
-                    Stroke::new(1.0, pal.accent),
-                );
-            }
-            if resp.clicked() {
-                let mut g = core.lock().unwrap();
-                g.upd_spin_until = Some(Instant::now() + Duration::from_millis(650));
-                let u_bg = g.updater.clone();
-                let dv = g.live.snapshot.driver_version.clone();
-                let aa = g.live.ui_settings.auto_update_app;
-                let ad = g.live.ui_settings.auto_update_driver;
-                g.rt.spawn(async move {
-                    u_bg.check_all(dv, aa, ad).await;
-                });
-            }
-        });
+        }
+        if resp.clicked() {
+            let mut g = core.lock().unwrap();
+            g.upd_spin_until = Some(Instant::now() + Duration::from_millis(650));
+            let u_bg = g.updater.clone();
+            let dv = g.live.snapshot.driver_version.clone();
+            let aa = g.live.ui_settings.auto_update_app;
+            let ad = g.live.ui_settings.auto_update_driver;
+            g.rt.spawn(async move {
+                u_bg.check_all(dv, aa, ad).await;
+            });
+        }
     });
-
-    ui.add_space(8.0);
     egui::Frame::new()
         .fill(pal.surface_elevated)
         .stroke(Stroke::new(1.0, pal.outline))

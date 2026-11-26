@@ -44,8 +44,7 @@ pub(crate) fn render_opt_appearance(
         )
     };
 
-    ui.label(RichText::new(hdr).size(12.0).color(pal.on_surface_muted));
-    ui.add_space(8.0);
+    super::options_section_header(ui, pal, &hdr, |_| {});
 
     egui::Frame::new()
         .fill(pal.surface_elevated)
@@ -258,7 +257,7 @@ pub(crate) fn render_opt_appearance(
                 ui.vertical(|ui| {
                     ui.label(
                         RichText::new(win_acc_title)
-                            .size(13.5)
+                            .font(semibold(14.0))
                             .color(pal.on_surface),
                     );
                     ui.label(

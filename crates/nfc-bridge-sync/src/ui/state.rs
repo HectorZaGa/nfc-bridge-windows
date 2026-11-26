@@ -36,6 +36,7 @@ pub(crate) struct SharedUiCore {
     pub(crate) main_visible: bool,
     pub(crate) main_want_focus: bool,
     pub(crate) options_open: bool,
+    pub(crate) options_just_opened: bool,
     pub(crate) options_want_focus: bool,
     pub(crate) tray_open: bool,
     pub(crate) tray_opened_at: Option<Instant>,
@@ -71,6 +72,7 @@ pub(crate) struct SharedUiCore {
     pub(crate) net_feedback: Option<(String, bool, Instant)>,
 
     pub(crate) ui_settings_dirty_until: Option<Instant>,
+    pub(crate) snapshot_dirty_until: Option<Instant>,
     pub(crate) auto_mobile_dirty_until: Option<Instant>,
     pub(crate) auto_mobile_optimistic: bool,
 
@@ -138,7 +140,24 @@ impl SharedUiCore {
         });
     }
 
-    pub(crate) fn send_ipc(&self, cmd: IpcCommand) {
+    pub(crate) fn send_ipc(&mut self, cmd: IpcCommand) {
+        let mut applied_optimistic = true;
+        match &cmd {
+            IpcCommand::SetUsbEnabled { enabled } => self.live.snapshot.usb_enabled = *enabled,
+            IpcCommand::SetUsbPriority { enabled } => self.live.snapshot.usb_auto_connect = *enabled,
+            IpcCommand::SetTcpEnabled { enabled } => self.live.snapshot.tcp_enabled = *enabled,
+            IpcCommand::SetBluetoothEnabled { enabled } => self.live.snapshot.bt_enabled = *enabled,
+            IpcCommand::SetWifiDirectEnabled { enabled } => self.live.snapshot.wfd_enabled = *enabled,
+            IpcCommand::SetPaused { paused } => self.live.paused = *paused,
+            IpcCommand::SetAutoAcceptMobileSwitch { enabled } => {
+                self.live.snapshot.auto_accept_mobile_switch = *enabled;
+            }
+            _ => applied_optimistic = false,
+        }
+        if applied_optimistic {
+            self.snapshot_dirty_until = Some(Instant::now() + Duration::from_millis(900));
+        }
+
         let ipc = self.ipc.clone();
         self.rt.spawn(async move {
             let _ = ipc.send_command(cmd).await;

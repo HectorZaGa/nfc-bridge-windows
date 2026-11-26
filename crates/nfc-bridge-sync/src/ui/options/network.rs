@@ -58,8 +58,7 @@ pub(crate) fn render_opt_network(
         )
     };
 
-    ui.label(RichText::new(hdr).size(12.0).color(pal.on_surface_muted));
-    ui.add_space(8.0);
+    super::options_section_header(ui, pal, &hdr, |_| {});
 
     egui::Frame::new()
         .fill(pal.surface_elevated)

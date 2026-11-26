@@ -1,7 +1,7 @@
 use super::super::state::SharedUiCore;
 use super::super::theme::ThemePalette;
 use super::super::widgets::{about_row, paint_divider};
-use egui::{CornerRadius, Margin, RichText, Stroke};
+use egui::{CornerRadius, Margin, Stroke};
 use std::sync::{Arc, Mutex};
 
 pub(crate) fn render_opt_about(
@@ -61,8 +61,7 @@ pub(crate) fn render_opt_about(
         )
     };
 
-    ui.label(RichText::new(hdr).size(12.0).color(pal.on_surface_muted));
-    ui.add_space(8.0);
+    super::options_section_header(ui, pal, &hdr, |_| {});
 
     egui::Frame::new()
         .fill(pal.surface_elevated)
