@@ -40,28 +40,15 @@ fn ensure_driver_running() {
         status = driver_mgr.check_driver_status();
     }
 
-    if status == DriverStatus::NotInstalled {
-        if let Some(local_driver) = driver_mgr.find_local_driver_binary() {
-            info!(
-                "Driver no activo, iniciando binario local silencioso {:?}...",
-                local_driver
-            );
-            if driver_mgr.start_local_driver_background(&local_driver).is_ok() {
-                std::thread::sleep(std::time::Duration::from_millis(600));
-                status = driver_mgr.check_driver_status();
-            }
-        }
-    }
-
     match status {
         DriverStatus::Running => {
-            info!("NFC Bridge Driver detectado y activo (IPC bajo control del driver).");
+            info!("NFC Bridge Driver detectado y activo (servicio de Windows).");
         }
         DriverStatus::InstalledStopped => {
             warn!("NFC Bridge Driver está instalado pero detenido. No habrá conexión hasta iniciarlo.");
         }
         DriverStatus::NotInstalled => {
-            warn!("DRIVER NO DETECTADO: Instala o inicia `nfc-bridge-driver` para habilitar conexiones.");
+            warn!("DRIVER NO INSTALADO: Se intentará descargar e instalar el servicio NfcBridgeDriver desde GitHub Releases.");
         }
     }
 }

@@ -162,21 +162,6 @@ impl DriverManager {
         Ok(target_path)
     }
 
-    pub fn find_local_driver_binary(&self) -> Option<PathBuf> {
-        let parent = std::env::current_exe().ok()?.parent()?.to_path_buf();
-        let candidates = [
-            parent.join("nfc-bridge-driver.exe"),
-            parent.join("driver").join("nfc-bridge-driver.exe"),
-            parent.join("..").join("driver").join("nfc-bridge-driver.exe"),
-        ];
-        candidates.into_iter().find(|c| c.exists())
-    }
-
-    pub fn start_local_driver_background(&self, driver_exe: &Path) -> std::io::Result<std::process::Child> {
-        info!("Iniciando driver virtual silencioso desde {:?}", driver_exe);
-        hidden_command(driver_exe).spawn()
-    }
-
     pub fn install_driver_service_elevated(&self, driver_exe: &Path) -> std::io::Result<bool> {
         let escaped_exe = driver_exe.to_string_lossy().replace('\'', "''");
         let script = format!(

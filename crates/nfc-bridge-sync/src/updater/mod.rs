@@ -15,8 +15,10 @@ use install::{
 };
 use models::GhRelease;
 use version::find_best_release_match;
+use crate::driver_manager::{DriverManager, DriverStatus};
 use crate::platform::launch_elevated_or_normal;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
@@ -28,6 +30,7 @@ pub const DRIVER_REPO: &str = "HectorZaGa/nfc-bridge-driver";
 pub struct DesktopUpdater {
     client: reqwest::Client,
     state: Arc<RwLock<UpdatesOverviewState>>,
+    driver_install_prompted: Arc<AtomicBool>,
 }
 
 impl Default for DesktopUpdater {
@@ -46,6 +49,7 @@ impl DesktopUpdater {
         Self {
             client,
             state: Arc::new(RwLock::new(UpdatesOverviewState::for_current_binary())),
+            driver_install_prompted: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -137,6 +141,7 @@ impl DesktopUpdater {
         }
 
         let local_drv = cur.driver_version.clone().unwrap_or_else(|| "0.0.0".to_string());
+        let drv_missing = DriverManager::new().check_driver_status() == DriverStatus::NotInstalled;
         match self
             .fetch_matching_release(DRIVER_REPO, "nfc-bridge-driver-", false)
             .await
@@ -156,8 +161,12 @@ impl DesktopUpdater {
                         st.driver_message = msg;
                         st.driver_available = Some(matched);
                     }
-                    if auto_update_driver {
-                        let _ = self.install_driver_update().await;
+                    if drv_missing {
+                        if !self.driver_install_prompted.swap(true, Ordering::SeqCst) {
+                            let _ = self.install_driver_internal(!auto_update_driver).await;
+                        }
+                    } else if auto_update_driver {
+                        let _ = self.install_driver_internal(false).await;
                     }
                 } else {
                     let mut st = self.state.write().await;
@@ -312,25 +321,23 @@ impl DesktopUpdater {
     }
 
     pub async fn install_driver_update(&self) -> Result<()> {
-        let (is_portable, release) = {
+        self.install_driver_internal(false).await
+    }
+
+    async fn install_driver_internal(&self, interactive: bool) -> Result<()> {
+        let release = {
             let mut st = self.state.write().await;
             let Some(rel) = st.driver_available.clone() else {
                 anyhow::bail!("No hay actualización disponible para el driver");
             };
             st.driver_status = "downloading".to_string();
             st.driver_message = format!("Descargando {}...", rel.asset_name);
-            (st.is_portable, rel)
+            rel
         };
 
-        let exe_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-
-        let dest_dir = if is_portable {
-            exe_dir.unwrap_or_else(default_updates_cache_dir)
-        } else {
-            default_updates_cache_dir()
-        };
+        // El controlador se instala como servicio de Windows; el instalador descargado
+        // siempre va a la caché temporal de AppData para no ensuciar carpetas portables.
+        let dest_dir = default_updates_cache_dir();
         let asset_path = dest_dir.join(&release.asset_name);
 
         if let Err(e) = self.download_to_path(&release.download_url, &asset_path).await {
@@ -358,10 +365,21 @@ impl DesktopUpdater {
             asset_path
         };
 
-        if lower.contains("-setup") || lower.contains("-installer") {
-            launch_elevated_or_normal(&target_exe, &["/UPDATE"])?;
+        let launch_res = if lower.contains("-setup") || lower.contains("-installer") {
+            if interactive {
+                launch_elevated_or_normal(&target_exe, &[])
+            } else {
+                launch_elevated_or_normal(&target_exe, &["/UPDATE"])
+            }
         } else {
-            launch_elevated_or_normal(&target_exe, &["--install-service"])?;
+            launch_elevated_or_normal(&target_exe, &["--install-service"])
+        };
+
+        if let Err(e) = launch_res {
+            let mut st = self.state.write().await;
+            st.driver_status = "available".to_string();
+            st.driver_message = format!("Disponible v{} ({})", release.version, release.asset_name);
+            return Err(e);
         }
 
         let mut st = self.state.write().await;

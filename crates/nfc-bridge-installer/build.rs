@@ -5,7 +5,9 @@ fn main() {
     println!("cargo:rerun-if-env-changed=NFC_INSTALLER_PRODUCT");
     println!("cargo:rerun-if-env-changed=NFC_INSTALLER_VERSION");
     println!("cargo:rerun-if-env-changed=NFC_INSTALLER_PAYLOAD_PATH");
-    println!("cargo:rerun-if-changed=../../assets/icons/installer");
+    println!("cargo:rerun-if-changed=../../assets/icons/sync");
+    println!("cargo:rerun-if-changed=../../assets/icons/tools");
+    println!("cargo:rerun-if-changed=../../../nfc-bridge-driver/assets/icons");
     println!("cargo:rerun-if-changed=../win32_build_common.rs");
 
     let product = std::env::var("NFC_INSTALLER_PRODUCT").unwrap_or_else(|_| "sync".to_string());
@@ -18,20 +20,20 @@ fn main() {
     let (title, setup_ico, uninst_ico, bgra) = match product.as_str() {
         "tools" => (
             "NFC Bridge Tools Setup",
-            "../../assets/icons/installer/tools-setup.ico",
-            "../../assets/icons/installer/tools-uninstall.ico",
+            "../../assets/icons/tools/setup.ico",
+            "../../assets/icons/tools/uninstall.ico",
             [212, 182, 6, 255],
         ),
         "driver" => (
             "NFC Bridge Driver Setup",
-            "../../assets/icons/installer/driver-setup.ico",
-            "../../assets/icons/installer/driver-uninstall.ico",
+            "../../../nfc-bridge-driver/assets/icons/setup.ico",
+            "../../../nfc-bridge-driver/assets/icons/uninstall.ico",
             [129, 185, 16, 255],
         ),
         _ => (
             "NFC Bridge Sync Setup",
-            "../../assets/icons/installer/sync-setup.ico",
-            "../../assets/icons/installer/sync-uninstall.ico",
+            "../../assets/icons/sync/setup.ico",
+            "../../assets/icons/sync/uninstall.ico",
             [246, 130, 59, 255],
         ),
     };
