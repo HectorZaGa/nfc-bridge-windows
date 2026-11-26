@@ -18,8 +18,10 @@ pub struct ThemePalette {
     pub accent: Color32,
     pub on_accent: Color32,
     pub accent_soft: Color32,
+    pub accent_card_bg: Color32,
     pub accent_on_soft: Color32,
     pub accent_border: Color32,
+    pub build_badge_bg: Color32,
     pub led_green: Color32,
     pub amber_pause: Color32,
     pub amber_soft: Color32,
@@ -53,9 +55,28 @@ impl ThemePalette {
         };
 
         let accent_soft = if is_dark {
-            Color32::from_rgba_unmultiplied(r, g, b, 44)
+            Color32::from_rgba_unmultiplied(r, g, b, 46)
         } else {
-            Color32::from_rgba_unmultiplied(r, g, b, 30)
+            Color32::from_rgba_unmultiplied(r, g, b, 31)
+        };
+        // bg-electric-blue-soft/35 sobre surface_card (#1E1E1E o #FFFFFF)
+        let accent_card_bg = if is_dark {
+            Color32::from_rgb(
+                (30.0 + (r as f32 - 30.0) * 0.065).round() as u8,
+                (30.0 + (g as f32 - 30.0) * 0.065).round() as u8,
+                (30.0 + (b as f32 - 30.0) * 0.065).round() as u8,
+            )
+        } else {
+            Color32::from_rgb(
+                (255.0 + (r as f32 - 255.0) * 0.045).round() as u8,
+                (255.0 + (g as f32 - 255.0) * 0.045).round() as u8,
+                (255.0 + (b as f32 - 255.0) * 0.045).round() as u8,
+            )
+        };
+        let build_badge_bg = if is_dark {
+            Color32::from_rgb(35, 35, 35)
+        } else {
+            Color32::from_rgb(242, 244, 247)
         };
         let accent_border = if is_dark {
             Color32::from_rgba_unmultiplied(r, g, b, 128)
@@ -90,8 +111,10 @@ impl ThemePalette {
                 accent,
                 on_accent,
                 accent_soft,
+                accent_card_bg,
                 accent_on_soft,
                 accent_border,
+                build_badge_bg,
                 led_green: Color32::from_rgb(34, 197, 94),
                 amber_pause: Color32::from_rgb(245, 158, 11),
                 amber_soft: Color32::from_rgb(42, 31, 10),
@@ -114,8 +137,10 @@ impl ThemePalette {
                 accent,
                 on_accent,
                 accent_soft,
+                accent_card_bg,
                 accent_on_soft,
                 accent_border,
+                build_badge_bg,
                 led_green: Color32::from_rgb(34, 197, 94),
                 amber_pause: Color32::from_rgb(217, 119, 6),
                 amber_soft: Color32::from_rgb(254, 243, 199),

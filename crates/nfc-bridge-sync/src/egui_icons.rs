@@ -13,7 +13,7 @@ pub mod glyph {
     pub const BLUETOOTH_SEARCHING: char = '\u{e60f}';
     pub const CABLE: char = '\u{efe6}';
     pub const CELL_TOWER: char = '\u{ebba}';
-    pub const CHECK: char = '\u{e668}';
+    pub const CHECK: char = '\u{e5ca}';
     pub const CHEVRON_RIGHT: char = '\u{e5cc}';
     pub const CLOSE: char = '\u{e5cd}';
     pub const COLORIZE: char = '\u{e3b8}';
@@ -65,6 +65,14 @@ pub fn icon_family() -> FontFamily {
     FontFamily::Name("icons".into())
 }
 
+pub fn semibold_family() -> FontFamily {
+    FontFamily::Name("semibold".into())
+}
+
+pub fn semibold(size: f32) -> FontId {
+    FontId::new(size, semibold_family())
+}
+
 pub fn icon_rich(ch: char, size: f32, color: Color32) -> RichText {
     let mut s = String::with_capacity(4);
     s.push(ch);
@@ -81,7 +89,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
         Arc::new(FontData::from_static(MATERIAL_SYMBOLS_TTF)),
     );
 
-    if let Some(segoe_bytes) = load_windows_font(&["SegUIVar.ttf", "segoeui.ttf"]) {
+    if let Some(segoe_bytes) = load_windows_font(&["segoeui.ttf", "SegUIVar.ttf"]) {
         fonts.font_data.insert(
             "segoe_ui".to_owned(),
             Arc::new(FontData::from_owned(segoe_bytes)),
@@ -89,6 +97,22 @@ pub fn setup_fonts(ctx: &egui::Context) {
         if let Some(list) = fonts.families.get_mut(&FontFamily::Proportional) {
             list.insert(0, "segoe_ui".to_owned());
         }
+    }
+
+    if let Some(sb_bytes) = load_windows_font(&["seguisb.ttf", "segoeuib.ttf", "segoeui.ttf"]) {
+        fonts.font_data.insert(
+            "segoe_ui_sb".to_owned(),
+            Arc::new(FontData::from_owned(sb_bytes)),
+        );
+        fonts.families.insert(
+            semibold_family(),
+            vec!["segoe_ui_sb".to_owned(), "material_symbols".to_owned()],
+        );
+    } else {
+        fonts.families.insert(
+            semibold_family(),
+            vec!["material_symbols".to_owned()],
+        );
     }
 
     if let Some(mono_bytes) = load_windows_font(&["CascadiaMono.ttf", "consola.ttf"]) {
@@ -141,40 +165,58 @@ pub fn paint_glyph(painter: &egui::Painter, center: Pos2, ch: char, size: f32, c
     );
 }
 
-/// Pinta el icono oficial de Android (cabeza + antenas + ojos) o Apple (silueta estilizada) en pequeño.
-pub fn paint_device_os_icon(painter: &egui::Painter, rect: Rect, os: &str, color: Color32) {
+/// Dibuja un chevron vertical (^ / v) limpio al estilo Material Symbols.
+pub fn paint_chevron_y(painter: &egui::Painter, center: Pos2, up: bool, size: f32, color: Color32) {
+    let dx = size * 0.25;
+    let dy = size * 0.14 * if up { -1.0 } else { 1.0 };
+    let stroke = Stroke::new((size * 0.105).max(1.4), color);
+    painter.line_segment(
+        [Pos2::new(center.x - dx, center.y - dy), Pos2::new(center.x, center.y + dy)],
+        stroke,
+    );
+    painter.line_segment(
+        [Pos2::new(center.x, center.y + dy), Pos2::new(center.x + dx, center.y - dy)],
+        stroke,
+    );
+}
+
+/// Pinta el icono oficial de Android (proporciones 24x24 exactas del SVG de Stitch) o Apple/iOS.
+pub fn paint_device_os_icon(
+    painter: &egui::Painter,
+    rect: Rect,
+    os: &str,
+    color: Color32,
+    eye_bg: Color32,
+) {
     let c = rect.center();
     if os.eq_ignore_ascii_case("ios") {
-        paint_glyph(painter, c, glyph::PHONE_IPHONE, rect.height() * 0.86, color);
+        paint_glyph(painter, c, glyph::PHONE_IPHONE, rect.height() * 0.9, color);
     } else {
-        // Cabeza Android limpia estilo Stitch (arco superior + base plana + 2 antenas + 2 ojos)
+        // viewBox 0 0 24 24 exacto del SVG Android (y base = 17, dome top = 9.5, antenas = 5.6)
         let s = rect.height().min(rect.width()) / 24.0;
-        let cx = c.x;
-        let cy = c.y + 3.5 * s;
-        let rx = 7.2 * s;
-        let mut pts = Vec::with_capacity(18);
-        for i in 0..=16 {
-            let ang = std::f32::consts::PI * (i as f32 / 16.0);
-            pts.push(Pos2::new(cx - ang.cos() * rx, cy - ang.sin() * (6.6 * s)));
+        let ox = rect.left() + (rect.width() - 24.0 * s) * 0.5;
+        let oy = rect.top() + (rect.height() - 24.0 * s) * 0.5;
+        let cx = ox + 12.0 * s;
+        let base_y = oy + 17.0 * s;
+        let rx = 10.4 * s;
+        let ry = 8.4 * s;
+        let mut pts = Vec::with_capacity(22);
+        for i in 0..=20 {
+            let ang = std::f32::consts::PI * (i as f32 / 20.0);
+            pts.push(Pos2::new(cx - ang.cos() * rx, base_y - ang.sin() * ry));
         }
         painter.add(egui::Shape::convex_polygon(pts, color, Stroke::NONE));
-        // Antenas
+        let ant_stroke = Stroke::new((1.55 * s).max(1.1), color);
         painter.line_segment(
-            [Pos2::new(cx - 3.0 * s, cy - 5.3 * s), Pos2::new(cx - 4.8 * s, cy - 8.4 * s)],
-            Stroke::new((1.5 * s).max(1.1), color),
+            [Pos2::new(ox + 8.9 * s, oy + 9.2 * s), Pos2::new(ox + 6.9 * s, oy + 5.7 * s)],
+            ant_stroke,
         );
         painter.line_segment(
-            [Pos2::new(cx + 3.0 * s, cy - 5.3 * s), Pos2::new(cx + 4.8 * s, cy - 8.4 * s)],
-            Stroke::new((1.5 * s).max(1.1), color),
+            [Pos2::new(ox + 15.1 * s, oy + 9.2 * s), Pos2::new(ox + 17.1 * s, oy + 5.7 * s)],
+            ant_stroke,
         );
-        // Ojos recortados en color de tarjeta (oscuros sobre claro o viceversa)
-        let eye_bg = if color.r() > 140 {
-            Color32::from_rgb(38, 38, 38)
-        } else {
-            Color32::from_rgb(236, 238, 242)
-        };
-        painter.circle_filled(Pos2::new(cx - 2.6 * s, cy - 2.2 * s), (1.05 * s).max(1.0), eye_bg);
-        painter.circle_filled(Pos2::new(cx + 2.6 * s, cy - 2.2 * s), (1.05 * s).max(1.0), eye_bg);
+        painter.circle_filled(Pos2::new(ox + 8.3 * s, oy + 13.7 * s), (1.35 * s).max(0.95), eye_bg);
+        painter.circle_filled(Pos2::new(ox + 15.7 * s, oy + 13.7 * s), (1.35 * s).max(0.95), eye_bg);
     }
 }
 
