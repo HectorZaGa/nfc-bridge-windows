@@ -34,17 +34,21 @@ pub(crate) fn render_panel_relay(
         copied_txt,
         copied_link,
         has_url,
+        relay_usable,
     ) = {
         let g = core.lock().unwrap();
         let snap = &g.live.snapshot;
         let has_u = snap.relay_url.as_deref().is_some_and(|u| !u.is_empty());
         let st_txt = if snap.relay_connected {
             g.t("panel_relay_status_connected")
+        } else if has_u && !snap.network_online {
+            g.t("panel_relay_status_no_network")
         } else if has_u {
             g.t("panel_relay_status_reconnecting")
         } else {
             g.t("panel_relay_status_inactive")
         };
+        let usable = snap.relay_connected || (has_u && snap.network_online);
         let now = Instant::now();
         (
             g.t("method_relay_title").to_string(),
@@ -65,6 +69,7 @@ pub(crate) fn render_panel_relay(
                 .as_ref()
                 .is_some_and(|(k, exp)| k == "relay_link" && now < *exp),
             has_u,
+            usable,
         )
     };
 
@@ -213,11 +218,17 @@ pub(crate) fn render_panel_relay(
 
     panel_push_footer(ui, footer_h);
 
-    if secondary_btn_accent_icon(ui, pal, glyph::REFRESH, &renew_lbl) {
-        core.lock().unwrap().live_relay_expires_at = None;
+    if relay_usable {
+        if secondary_btn_accent_icon(ui, pal, glyph::REFRESH, &renew_lbl) {
+            core.lock().unwrap().live_relay_expires_at = None;
+        }
+    } else {
+        ui.add_enabled_ui(false, |ui| {
+            let _ = secondary_btn_accent_icon(ui, pal, glyph::REFRESH, &renew_lbl);
+        });
     }
     ui.add_space(4.0);
-    if primary_cta_btn(ui, pal, glyph::QR_CODE, &qr_lbl, true) {
+    if primary_cta_btn(ui, pal, glyph::QR_CODE, &qr_lbl, relay_usable) {
         trigger_qr_request(core, ui.ctx(), "relay");
     }
 }

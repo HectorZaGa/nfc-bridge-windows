@@ -1,8 +1,8 @@
-//! Renderizado QR nativo en `egui` con nivel de corrección de errores H e icono central
-//! envuelto por un contorno en forma exacta con separación limpia sobre los módulos QR.
+//! Renderizado QR nativo en `egui` con nivel de corrección de errores M (módulos amplios)
+//! e ícono central envuelto por contorno exacto centrado por bounding-box geométrico (`mesh_bounds`).
 
-use super::icons::{glyph, paint_glyph};
-use egui::{Color32, CornerRadius, Painter, Pos2, Rect, Vec2};
+use super::icons::icon_family;
+use egui::{Color32, CornerRadius, FontId, Painter, Pos2, Rect, Vec2};
 use qrcode::{Color as QrColor, EcLevel, QrCode};
 
 pub fn paint_qr_box(
@@ -12,14 +12,14 @@ pub fn paint_qr_box(
     method: &str,
     accent: Color32,
 ) -> Result<(), String> {
-    let code = QrCode::with_error_correction_level(payload.as_bytes(), EcLevel::H)
+    let code = QrCode::with_error_correction_level(payload.as_bytes(), EcLevel::M)
         .map_err(|e| e.to_string())?;
 
     painter.rect_filled(box_rect, CornerRadius::same(12), Color32::WHITE);
 
     let width = code.width();
     let colors = code.to_colors();
-    let pad = 10.0_f32;
+    let pad = 8.0_f32;
     let inner = box_rect.shrink(pad);
     let mod_size = inner.width() / (width as f32);
     let dark = Color32::from_rgb(18, 18, 18);
@@ -29,44 +29,48 @@ pub fn paint_qr_box(
             if colors[row * width + col] == QrColor::Dark {
                 let x0 = inner.left() + (col as f32) * mod_size;
                 let y0 = inner.top() + (row as f32) * mod_size;
-                let r = Rect::from_min_size(Pos2::new(x0, y0), Vec2::splat(mod_size + 0.35));
+                let x1 = inner.left() + ((col + 1) as f32) * mod_size;
+                let y1 = inner.top() + ((row + 1) as f32) * mod_size;
+                let r = Rect::from_min_max(Pos2::new(x0, y0), Pos2::new(x1 + 0.05, y1 + 0.05));
                 painter.rect_filled(r, CornerRadius::ZERO, dark);
             }
         }
     }
 
     let icon_char = match method {
-        "tcp" => glyph::WIFI,
-        "bluetooth" => glyph::BLUETOOTH,
-        "wifi_direct" => glyph::WIFI_TETHERING,
-        _ => glyph::LINK,
+        "tcp" => super::icons::glyph::WIFI,
+        "bluetooth" => super::icons::glyph::BLUETOOTH,
+        "wifi_direct" => super::icons::glyph::WIFI_TETHERING,
+        _ => super::icons::glyph::LINK,
     };
 
     let center = box_rect.center();
-    let icon_size = 34.0_f32;
-    let contour_spread = 4.6_f32;
-    let contour_font_size = icon_size + 6.0;
+    let icon_size = 28.0_f32;
+    let contour_font_size = icon_size + 5.0;
+    let contour_spread = 3.2_f32;
+    let mut glyph_str = String::with_capacity(4);
+    glyph_str.push(icon_char);
 
-    paint_glyph(painter, center, icon_char, contour_font_size, Color32::WHITE);
-    for i in 0..16 {
-        let ang = (i as f32) * (std::f32::consts::TAU / 16.0);
+    let contour_gal = painter.layout_no_wrap(
+        glyph_str.clone(),
+        FontId::new(contour_font_size, icon_family()),
+        Color32::WHITE,
+    );
+    let contour_origin = center - contour_gal.mesh_bounds.center().to_vec2();
+    painter.galley(contour_origin, contour_gal.clone(), Color32::WHITE);
+    for i in 0..24 {
+        let ang = (i as f32) * (std::f32::consts::TAU / 24.0);
         let offset = Vec2::new(ang.cos() * contour_spread, ang.sin() * contour_spread);
-        paint_glyph(
-            painter,
-            center + offset,
-            icon_char,
-            contour_font_size,
-            Color32::WHITE,
-        );
+        painter.galley(contour_origin + offset, contour_gal.clone(), Color32::WHITE);
     }
-    paint_glyph(painter, center, icon_char, icon_size, accent);
-    paint_glyph(
-        painter,
-        center + Vec2::new(0.45, 0.0),
-        icon_char,
-        icon_size,
+
+    let fg_gal = painter.layout_no_wrap(
+        glyph_str,
+        FontId::new(icon_size, icon_family()),
         accent,
     );
+    let fg_origin = center - fg_gal.mesh_bounds.center().to_vec2();
+    painter.galley(fg_origin, fg_gal, accent);
 
     Ok(())
 }

@@ -113,6 +113,8 @@ pub enum IpcEvent {
         auto_accept_mobile_switch: bool,
         #[serde(default)]
         trusted_devices: Vec<TrustedDeviceInfo>,
+        #[serde(default = "default_true")]
+        network_online: bool,
     },
     PendingMobileSwitch {
         request_id: String,
@@ -193,6 +195,7 @@ pub struct TransportSnapshotData {
     pub tcp_ip_override: Option<String>,
     pub auto_accept_mobile_switch: bool,
     pub trusted_devices: Vec<TrustedDeviceInfo>,
+    pub network_online: bool,
 }
 
 fn default_language() -> String {
@@ -274,6 +277,7 @@ impl Default for TransportSnapshotData {
             tcp_ip_override: None,
             auto_accept_mobile_switch: false,
             trusted_devices: Vec::new(),
+            network_online: true,
         }
     }
 }

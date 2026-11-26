@@ -85,6 +85,7 @@
   "panel_tcp_copy_port": "Copiar puerto",
   "panel_relay_status_connected": "Conectado",
   "panel_relay_status_reconnecting": "Reconectando",
+  "panel_relay_status_no_network": "Sin red",
   "panel_relay_status_inactive": "Sin Relay",
   "panel_relay_url_label": "URL de tu Cloud Relay (Worker)",
   "panel_relay_url_placeholder": "https://nfc-bridge.hectorzaga96.workers.dev",

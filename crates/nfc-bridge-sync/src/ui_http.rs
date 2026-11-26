@@ -107,7 +107,7 @@ impl DesktopUiServer {
 }
 
 pub fn render_qr_svg(payload: &str) -> Result<String, String> {
-    let code = QrCode::with_error_correction_level(payload.as_bytes(), EcLevel::H)
+    let code = QrCode::with_error_correction_level(payload.as_bytes(), EcLevel::M)
         .map_err(|e| e.to_string())?;
     let image = code
         .render::<svg::Color>()

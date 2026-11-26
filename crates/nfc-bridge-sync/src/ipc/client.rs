@@ -436,6 +436,7 @@ impl DriverIpcClient {
                 tcp_ip_override,
                 auto_accept_mobile_switch,
                 trusted_devices,
+                network_online,
             } => {
                 let mut st = self.state.write().await;
                 st.snapshot = TransportSnapshotData {
@@ -463,6 +464,7 @@ impl DriverIpcClient {
                     tcp_ip_override,
                     auto_accept_mobile_switch,
                     trusted_devices,
+                    network_online,
                 };
                 Self::reconcile_saved_selection(&mut st, None);
             }
