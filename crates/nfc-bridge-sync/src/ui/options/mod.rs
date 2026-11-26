@@ -8,6 +8,8 @@ use super::icons::{glyph, paint_glyph, semibold};
 use super::state::{OptionsTab, SharedUiCore};
 use super::theme::{apply_egui_visuals, apply_win32_dwm_to_title, ThemePalette};
 use super::widgets::paint_chrome_btn;
+#[cfg(windows)]
+use crate::platform::{hide_tray_popup_win32, uncloak_window_win32};
 use color_picker::render_hsv_color_popover;
 use egui::{
     text::LayoutJob, Align, Color32, CornerRadius, Id, Layout, Margin, Pos2, Rect, Sense, Stroke,
@@ -50,16 +52,26 @@ pub(crate) fn render_options_viewport(
 ) {
     let ctx = ui.ctx().clone();
     if ctx.input(|i| i.viewport().close_requested()) {
-        let mut g = core.lock().unwrap();
-        g.options_open = false;
-        g.options_painted = false;
-        g.options_target_pos = None;
-        drop(g);
+        ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+        core.lock().unwrap().close_options();
+        #[cfg(windows)]
+        hide_tray_popup_win32(opt_title);
         ctx.request_repaint_of(ViewportId::ROOT);
+        return;
     }
 
-    let (pal, needs_vis_before) = {
+    let (pal, needs_vis_before, stage_was) = {
         let mut g = core.lock().unwrap();
+        if !g.options_open {
+            drop(g);
+            #[cfg(windows)]
+            hide_tray_popup_win32(opt_title);
+            return;
+        }
+        let stage = g.options_paint_stage;
+        if stage == 2 {
+            g.options_paint_stage = 0;
+        }
         let pal = g.palette();
         let need_vis = g.last_visuals_pal != Some(pal);
         if need_vis {
@@ -70,8 +82,12 @@ pub(crate) fn render_options_viewport(
             g.last_dwm_opts_key = Some(dwm_key);
             apply_win32_dwm_to_title(opt_title, &pal);
         }
-        (pal, need_vis)
+        (pal, need_vis, stage)
     };
+    if stage_was == 2 {
+        #[cfg(windows)]
+        uncloak_window_win32(opt_title, true);
+    }
     if needs_vis_before {
         apply_egui_visuals(&ctx, &pal);
     }
@@ -140,12 +156,9 @@ pub(crate) fn render_options_viewport(
                 ctx.send_viewport_cmd(ViewportCommand::Minimized(true));
             }
             if close_resp.clicked() {
-                let mut g = core.lock().unwrap();
-                g.options_open = false;
-                g.options_painted = false;
-                g.options_target_pos = None;
-                drop(g);
-                ctx.send_viewport_cmd(ViewportCommand::Close);
+                core.lock().unwrap().close_options();
+                #[cfg(windows)]
+                hide_tray_popup_win32(opt_title);
                 ctx.request_repaint_of(ViewportId::ROOT);
             }
 
@@ -320,19 +333,9 @@ pub(crate) fn render_options_viewport(
             None
         }
     };
-    let first_paint_target = {
-        let mut g = core.lock().unwrap();
-        if !g.options_painted {
-            g.options_painted = true;
-            g.options_target_pos
-        } else {
-            None
-        }
-    };
-    if let Some(tp) = first_paint_target {
-        ctx.send_viewport_cmd(ViewportCommand::OuterPosition(tp));
-        ctx.send_viewport_cmd(ViewportCommand::Focus);
-        ctx.request_repaint_of(ViewportId::ROOT);
+    if stage_was == 1 {
+        core.lock().unwrap().options_paint_stage = 2;
+        ctx.request_repaint();
     }
     if let Some((pal_after, main_title, opt_open, tray_open)) = pal_change {
         apply_egui_visuals(&ctx, &pal_after);

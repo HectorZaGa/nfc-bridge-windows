@@ -160,15 +160,7 @@ pub(crate) fn render_main_viewport(
             paint_chrome_btn(ui.painter(), close_rect, &close_resp, glyph::CLOSE, true, &pal);
 
             if opt_resp.clicked() {
-                let mut g = core.lock().unwrap();
-                let was_open = g.options_open;
-                g.options_open = true;
-                if !was_open {
-                    g.options_just_opened = true;
-                    g.options_painted = false;
-                    g.options_target_pos = None;
-                }
-                g.options_want_focus = true;
+                core.lock().unwrap().open_options(None);
             }
             if min_resp.clicked() {
                 ctx.send_viewport_cmd(ViewportCommand::Minimized(true));

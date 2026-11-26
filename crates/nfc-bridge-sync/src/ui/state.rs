@@ -38,16 +38,18 @@ pub(crate) struct SharedUiCore {
     pub(crate) options_open: bool,
     pub(crate) options_just_opened: bool,
     pub(crate) options_want_focus: bool,
-    pub(crate) options_painted: bool,
+    pub(crate) options_paint_stage: u8,
     pub(crate) options_target_pos: Option<Pos2>,
     pub(crate) tray_open: bool,
+    pub(crate) tray_paint_stage: u8,
     pub(crate) tray_input_mask: u8,
     pub(crate) tray_opened_at: Option<Instant>,
     pub(crate) tray_closed_at: Option<Instant>,
     pub(crate) tray_pos: Option<Pos2>,
     pub(crate) tray_anchor_px: Option<(i32, i32)>,
     pub(crate) tray_devices_expanded: bool,
-    pub(crate) tray_measured_height: Option<(bool, usize, f32)>,
+    pub(crate) tray_qr_expanded: bool,
+    pub(crate) tray_measured_height: Option<(bool, bool, usize, bool, f32)>,
     pub(crate) should_quit: bool,
 
     // Estado visual de la ventana principal
@@ -129,6 +131,26 @@ impl SharedUiCore {
             };
             self.t(key).to_string()
         }
+    }
+
+    pub(crate) fn open_options(&mut self, tab: Option<OptionsTab>) {
+        if let Some(t) = tab {
+            self.options_tab = t;
+        }
+        let was_open = self.options_open;
+        self.options_open = true;
+        if !was_open {
+            self.options_just_opened = true;
+            self.options_paint_stage = 1;
+            self.options_target_pos = None;
+        }
+        self.options_want_focus = true;
+    }
+
+    pub(crate) fn close_options(&mut self) {
+        self.options_open = false;
+        self.options_paint_stage = 0;
+        self.options_target_pos = None;
     }
 
     pub(crate) fn has_pending_update(&self) -> bool {

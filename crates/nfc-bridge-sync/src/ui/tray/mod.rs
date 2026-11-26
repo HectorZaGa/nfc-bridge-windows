@@ -10,6 +10,7 @@ use crate::ipc::IpcCommand;
 use crate::platform::{
     configure_tray_popup_win32, hide_tray_popup_win32, is_cursor_in_window_win32,
     poll_tray_input_edges_win32, restore_main_window_win32, show_tray_popup_at_win32,
+    uncloak_window_win32,
 };
 use egui::{
     Align, Color32, CornerRadius, FontId, Layout, Margin, Pos2, Rect, RichText, Sense, Stroke,
@@ -20,17 +21,22 @@ use std::time::Duration;
 
 pub(crate) fn estimate_tray_height(g: &SharedUiCore) -> f32 {
     let dev_count = g.live.snapshot.trusted_devices.len().min(4);
-    if let Some((exp, cnt, measured)) = g.tray_measured_height {
-        if exp == g.tray_devices_expanded && cnt == dev_count {
+    let has_multi = g.live.snapshot.trusted_devices.len() > 1;
+    let dev_exp = has_multi && g.tray_devices_expanded;
+    let qr_exp = g.tray_qr_expanded;
+    if let Some((hm, de, cnt, qe, measured)) = g.tray_measured_height {
+        if hm == has_multi && de == dev_exp && cnt == dev_count && qe == qr_exp {
             return measured;
         }
     }
-    let base = 336.0_f32;
-    if g.tray_devices_expanded {
-        base + (dev_count as f32) * 30.0
-    } else {
-        base
+    let mut base = if has_multi { 336.0_f32 } else { 302.0_f32 };
+    if dev_exp {
+        base += (dev_count as f32) * 30.0;
     }
+    if qr_exp {
+        base += 4.0 * 30.0;
+    }
+    base
 }
 
 pub(crate) fn render_tray_viewport(
@@ -42,14 +48,19 @@ pub(crate) fn render_tray_viewport(
     let esc_pressed = ctx.input(|i| i.key_pressed(egui::Key::Escape));
     let close_req = ctx.input(|i| i.viewport().close_requested());
     let mut closing_now = false;
-    {
+    let stage_was = {
         let mut g = core.lock().unwrap();
         if !g.tray_open || g.should_quit {
             g.tray_open = false;
+            g.tray_paint_stage = 0;
             drop(g);
             #[cfg(windows)]
             hide_tray_popup_win32(tray_title);
             return;
+        }
+        let stg = g.tray_paint_stage;
+        if stg == 2 {
+            g.tray_paint_stage = 0;
         }
         let pointer_in_rect = ctx.input(|i| i.pointer.hover_pos().is_some()) || {
             #[cfg(windows)]
@@ -74,17 +85,27 @@ pub(crate) fn render_tray_viewport(
         let past_grace = g
             .tray_opened_at
             .is_some_and(|t| t.elapsed() > Duration::from_millis(180));
-        if esc_pressed || esc_edge || close_req || (!pointer_in_rect && past_grace && mouse_edge) {
+        if esc_pressed
+            || esc_edge
+            || close_req
+            || (stg == 0 && !pointer_in_rect && past_grace && mouse_edge)
+        {
             g.tray_open = false;
+            g.tray_paint_stage = 0;
             g.tray_closed_at = Some(std::time::Instant::now());
             closing_now = true;
         }
-    }
+        stg
+    };
     if closing_now {
         #[cfg(windows)]
         hide_tray_popup_win32(tray_title);
         ctx.request_repaint_of(egui::ViewportId::ROOT);
         return;
+    }
+    if stage_was == 2 {
+        #[cfg(windows)]
+        uncloak_window_win32(tray_title, false);
     }
     ctx.request_repaint_after(Duration::from_millis(25));
 
@@ -100,7 +121,9 @@ pub(crate) fn render_tray_viewport(
         active_id,
         selected_id,
         dev_expanded,
+        qr_expanded,
         qr_lbl,
+        qr_options,
         paused,
         pause_lbl,
         usb_prio,
@@ -120,7 +143,6 @@ pub(crate) fn render_tray_viewport(
             configure_tray_popup_win32(tray_title);
         }
         let st = &g.live;
-        let snap = &st.snapshot;
         let (l_c, s_txt) = if !st.driver_online {
             (
                 pal.red_disconnect,
@@ -151,6 +173,44 @@ pub(crate) fn render_tray_viewport(
                 g.t("device_disconnected_short").to_string(),
             )
         };
+        let has_multi_devs = g.live.snapshot.trusted_devices.len() > 1;
+        let relay_has_url = g
+            .live
+            .snapshot
+            .relay_url
+            .as_deref()
+            .is_some_and(|u| !u.trim().is_empty());
+        let drv_on = g.live.driver_online;
+        let devices = g.live.snapshot.trusted_devices.clone();
+        let active_id = g.live.active_device_id.clone();
+        let selected_id = g.live.selected_device_id.clone();
+        let paused = g.live.paused;
+        let usb_prio = g.live.snapshot.usb_auto_connect;
+        let connected = g.live.connected;
+        if !has_multi_devs {
+            g.tray_devices_expanded = false;
+        }
+        let qr_opts = vec![
+            ("tcp", glyph::WIFI, g.t("method_tcp_title").to_string(), drv_on),
+            (
+                "bluetooth",
+                glyph::BLUETOOTH,
+                g.t("method_bt_title").to_string(),
+                drv_on,
+            ),
+            (
+                "relay",
+                glyph::LINK,
+                g.t("method_relay_title").to_string(),
+                drv_on && relay_has_url,
+            ),
+            (
+                "wifi_direct",
+                glyph::WIFI_TETHERING,
+                g.t("method_wfd_title").to_string(),
+                drv_on,
+            ),
+        ];
         (
             pal,
             g.app_display_name(),
@@ -159,27 +219,30 @@ pub(crate) fn render_tray_viewport(
             s_txt,
             g.t("tray_open_main").to_string(),
             g.t("tray_switch_device").to_string(),
-            snap.trusted_devices.clone(),
-            st.active_device_id.clone(),
-            st.selected_device_id.clone(),
-            g.tray_devices_expanded,
+            devices,
+            active_id,
+            selected_id,
+            g.tray_devices_expanded && has_multi_devs,
+            g.tray_qr_expanded,
             g.t("tray_show_qr").to_string(),
-            st.paused,
-            g.t(if st.paused {
+            qr_opts,
+            paused,
+            g.t(if paused {
                 "tray_resume_reader"
             } else {
                 "tray_pause_reader"
             })
             .to_string(),
-            snap.usb_auto_connect,
+            usb_prio,
             g.t("tray_usb_priority").to_string(),
             g.t("tray_options").to_string(),
-            st.connected,
+            connected,
             g.t("tray_disconnect").to_string(),
             g.t("tray_exit").to_string(),
         )
     };
 
+    let has_multi_devs = devices.len() > 1;
     let dev_count = devices.len().min(4);
     egui::Frame::new()
         .fill(pal.surface_card)
@@ -265,81 +328,98 @@ pub(crate) fn render_tray_viewport(
                 ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
 
-            let chev_ic = if dev_expanded {
-                glyph::EXPAND_MORE
-            } else {
-                glyph::CHEVRON_RIGHT
-            };
-            if tray_menu_item(
-                ui,
-                &pal,
-                glyph::SMARTPHONE,
-                pal.on_surface_muted,
-                &switch_lbl,
-                pal.on_surface,
-                false,
-                Some((chev_ic, pal.on_surface_muted)),
-                false,
-            ) && !closing_now
-            {
-                let mut g = core.lock().unwrap();
-                g.tray_devices_expanded = !g.tray_devices_expanded;
-                let next_h = estimate_tray_height(&g);
-                #[cfg(windows)]
-                if let Some((ax, ay)) = g.tray_anchor_px {
-                    let ppp = ctx.pixels_per_point().max(1.0);
-                    if let Some((lx, ly)) = show_tray_popup_at_win32(tray_title, ax, ay, 296.0, next_h, ppp) {
-                        g.tray_pos = Some(Pos2::new(lx, ly));
+            if has_multi_devs {
+                let chev_ic = if dev_expanded {
+                    glyph::EXPAND_MORE
+                } else {
+                    glyph::CHEVRON_RIGHT
+                };
+                if tray_menu_item(
+                    ui,
+                    &pal,
+                    glyph::SMARTPHONE,
+                    pal.on_surface_muted,
+                    &switch_lbl,
+                    pal.on_surface,
+                    false,
+                    Some((chev_ic, pal.on_surface_muted)),
+                    false,
+                ) && !closing_now
+                {
+                    let mut g = core.lock().unwrap();
+                    g.tray_devices_expanded = !g.tray_devices_expanded;
+                    if g.tray_devices_expanded {
+                        g.tray_qr_expanded = false;
                     }
+                    let next_h = estimate_tray_height(&g);
+                    #[cfg(windows)]
+                    if let Some((ax, ay)) = g.tray_anchor_px {
+                        let ppp = ctx.pixels_per_point().max(1.0);
+                        if let Some((lx, ly)) = show_tray_popup_at_win32(
+                            tray_title, ax, ay, 296.0, next_h, ppp, false,
+                        ) {
+                            g.tray_pos = Some(Pos2::new(lx, ly));
+                        }
+                    }
+                    drop(g);
+                    ctx.request_repaint();
                 }
-                drop(g);
-                ctx.request_repaint();
-            }
-            if dev_expanded {
-                for dev in devices.iter().take(4) {
-                    let is_act = Some(&dev.device_id) == active_id.as_ref()
-                        || Some(&dev.device_id) == selected_id.as_ref();
-                    let (r, resp) =
-                        ui.allocate_exact_size(Vec2::new(ui.available_width(), 28.0), Sense::click());
-                    let inner = Rect::from_min_max(Pos2::new(r.left() + 26.0, r.top()), r.max);
-                    if is_act || resp.hovered() {
-                        ui.painter()
-                            .rect_filled(inner, CornerRadius::same(8), pal.surface_elevated);
-                    }
-                    ui.painter().text(
-                        Pos2::new(inner.left() + 8.0, inner.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        &dev.device_name,
-                        FontId::proportional(11.5),
-                        if is_act {
-                            pal.on_surface
-                        } else {
-                            pal.on_surface_muted
-                        },
-                    );
-                    if is_act {
-                        paint_glyph(
-                            ui.painter(),
-                            Pos2::new(inner.right() - 12.0, inner.center().y),
-                            glyph::CHECK,
-                            14.0,
-                            pal.led_green,
+                if dev_expanded {
+                    for dev in devices.iter().take(4) {
+                        let is_act = Some(&dev.device_id) == active_id.as_ref()
+                            || Some(&dev.device_id) == selected_id.as_ref();
+                        let (r, resp) = ui.allocate_exact_size(
+                            Vec2::new(ui.available_width(), 28.0),
+                            Sense::click(),
                         );
-                    }
-                    if resp.clicked() {
-                        let id = dev.device_id.clone();
-                        let g = core.lock().unwrap();
-                        let ipc = g.ipc.clone();
-                        g.rt.spawn(async move {
-                            ipc.select_saved_profile(&id).await;
-                            let _ = ipc
-                                .send_command(IpcCommand::SelectTrustedDevice { device_id: id })
-                                .await;
-                        });
+                        let inner = Rect::from_min_max(Pos2::new(r.left() + 26.0, r.top()), r.max);
+                        if is_act || resp.hovered() {
+                            ui.painter().rect_filled(
+                                inner,
+                                CornerRadius::same(8),
+                                pal.surface_elevated,
+                            );
+                        }
+                        ui.painter().text(
+                            Pos2::new(inner.left() + 8.0, inner.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            &dev.device_name,
+                            FontId::proportional(11.5),
+                            if is_act {
+                                pal.on_surface
+                            } else {
+                                pal.on_surface_muted
+                            },
+                        );
+                        if is_act {
+                            paint_glyph(
+                                ui.painter(),
+                                Pos2::new(inner.right() - 12.0, inner.center().y),
+                                glyph::CHECK,
+                                14.0,
+                                pal.led_green,
+                            );
+                        }
+                        if resp.clicked() {
+                            let id = dev.device_id.clone();
+                            let g = core.lock().unwrap();
+                            let ipc = g.ipc.clone();
+                            g.rt.spawn(async move {
+                                ipc.select_saved_profile(&id).await;
+                                let _ = ipc
+                                    .send_command(IpcCommand::SelectTrustedDevice { device_id: id })
+                                    .await;
+                            });
+                        }
                     }
                 }
             }
 
+            let qr_chev = if qr_expanded {
+                glyph::EXPAND_MORE
+            } else {
+                glyph::CHEVRON_RIGHT
+            };
             if tray_menu_item(
                 ui,
                 &pal,
@@ -348,25 +428,85 @@ pub(crate) fn render_tray_viewport(
                 &qr_lbl,
                 pal.on_surface,
                 false,
-                None,
+                Some((qr_chev, pal.on_surface_muted)),
                 false,
             ) && !closing_now
             {
                 let mut g = core.lock().unwrap();
-                g.tray_open = false;
-                g.tray_closed_at = Some(std::time::Instant::now());
-                g.main_visible = true;
-                g.main_want_focus = true;
-                g.active_panel = "tcp".to_string();
-                let mt = g.app_title.clone();
-                drop(g);
-                #[cfg(windows)]
-                {
-                    hide_tray_popup_win32(tray_title);
-                    restore_main_window_win32(&mt);
+                g.tray_qr_expanded = !g.tray_qr_expanded;
+                if g.tray_qr_expanded {
+                    g.tray_devices_expanded = false;
                 }
-                trigger_qr_request(core, &ctx, "tcp");
-                ctx.request_repaint_of(egui::ViewportId::ROOT);
+                let next_h = estimate_tray_height(&g);
+                #[cfg(windows)]
+                if let Some((ax, ay)) = g.tray_anchor_px {
+                    let ppp = ctx.pixels_per_point().max(1.0);
+                    if let Some((lx, ly)) =
+                        show_tray_popup_at_win32(tray_title, ax, ay, 296.0, next_h, ppp, false)
+                    {
+                        g.tray_pos = Some(Pos2::new(lx, ly));
+                    }
+                }
+                drop(g);
+                ctx.request_repaint();
+            }
+            if qr_expanded {
+                for (method_key, m_ic, m_lbl, can_generate) in qr_options {
+                    let (r, resp) =
+                        ui.allocate_exact_size(Vec2::new(ui.available_width(), 28.0), Sense::click());
+                    let inner = Rect::from_min_max(Pos2::new(r.left() + 26.0, r.top()), r.max);
+                    if resp.hovered() {
+                        ui.painter()
+                            .rect_filled(inner, CornerRadius::same(8), pal.surface_elevated);
+                    }
+                    paint_glyph(
+                        ui.painter(),
+                        Pos2::new(inner.left() + 14.0, inner.center().y),
+                        m_ic,
+                        14.0,
+                        if can_generate {
+                            pal.accent
+                        } else {
+                            pal.on_surface_muted
+                        },
+                    );
+                    ui.painter().text(
+                        Pos2::new(inner.left() + 28.0, inner.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        &m_lbl,
+                        FontId::proportional(11.5),
+                        if can_generate {
+                            pal.on_surface
+                        } else {
+                            pal.on_surface_muted
+                        },
+                    );
+                    if resp.clicked() && !closing_now {
+                        let mut g = core.lock().unwrap();
+                        g.tray_open = false;
+                        g.tray_paint_stage = 0;
+                        g.tray_qr_expanded = false;
+                        g.tray_closed_at = Some(std::time::Instant::now());
+                        g.main_visible = true;
+                        g.main_want_focus = true;
+                        g.active_panel = method_key.to_string();
+                        if !can_generate {
+                            g.qr_method = None;
+                            g.qr_error = None;
+                        }
+                        let mt = g.app_title.clone();
+                        drop(g);
+                        #[cfg(windows)]
+                        {
+                            hide_tray_popup_win32(tray_title);
+                            restore_main_window_win32(&mt);
+                        }
+                        if can_generate {
+                            trigger_qr_request(core, &ctx, method_key);
+                        }
+                        ctx.request_repaint_of(egui::ViewportId::ROOT);
+                    }
+                }
             }
 
             paint_divider(ui, &pal);
@@ -434,15 +574,9 @@ pub(crate) fn render_tray_viewport(
             {
                 let mut g = core.lock().unwrap();
                 g.tray_open = false;
+                g.tray_paint_stage = 0;
                 g.tray_closed_at = Some(std::time::Instant::now());
-                let was_open = g.options_open;
-                g.options_open = true;
-                if !was_open {
-                    g.options_just_opened = true;
-                    g.options_painted = false;
-                    g.options_target_pos = None;
-                }
-                g.options_want_focus = true;
+                g.open_options(None);
                 drop(g);
                 #[cfg(windows)]
                 hide_tray_popup_win32(tray_title);
@@ -503,20 +637,31 @@ pub(crate) fn render_tray_viewport(
             });
             if measured_h > 100.0 && (cur_h - measured_h).abs() > 1.0 && !closing_now {
                 let mut g = core.lock().unwrap();
-                if g.tray_measured_height
-                    .is_none_or(|(e, c, h)| e != dev_expanded || c != dev_count || (h - measured_h).abs() > 1.0)
-                {
-                    g.tray_measured_height = Some((dev_expanded, dev_count, measured_h));
+                if g.tray_measured_height.is_none_or(|(hm, de, cnt, qe, h)| {
+                    hm != has_multi_devs
+                        || de != dev_expanded
+                        || cnt != dev_count
+                        || qe != qr_expanded
+                        || (h - measured_h).abs() > 1.0
+                }) {
+                    g.tray_measured_height =
+                        Some((has_multi_devs, dev_expanded, dev_count, qr_expanded, measured_h));
                     #[cfg(windows)]
                     if let Some((ax, ay)) = g.tray_anchor_px {
                         let ppp = ctx.pixels_per_point().max(1.0);
-                        if let Some((lx, ly)) = show_tray_popup_at_win32(tray_title, ax, ay, 296.0, measured_h, ppp) {
+                        if let Some((lx, ly)) = show_tray_popup_at_win32(
+                            tray_title, ax, ay, 296.0, measured_h, ppp, false,
+                        ) {
                             g.tray_pos = Some(Pos2::new(lx, ly));
                         }
                     }
                     drop(g);
                     ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(296.0, measured_h)));
                 }
+            }
+            if stage_was == 1 {
+                core.lock().unwrap().tray_paint_stage = 2;
+                ctx.request_repaint();
             }
         });
 }

@@ -299,16 +299,7 @@ pub(crate) fn render_left_column(
                 if !driver_online && !driver_installed {
                     let action_w = (pause_btn_w + 6.0 + 32.0).max(112.0);
                     if small_accent_btn(ui, pal, &install_drv_lbl, action_w, 32.0) {
-                        let mut g = core.lock().unwrap();
-                        let was_open = g.options_open;
-                        g.options_tab = OptionsTab::Updates;
-                        g.options_open = true;
-                        if !was_open {
-                            g.options_just_opened = true;
-                            g.options_painted = false;
-                            g.options_target_pos = None;
-                        }
-                        g.options_want_focus = true;
+                        core.lock().unwrap().open_options(Some(OptionsTab::Updates));
                     }
                 } else {
                     let (p_rect, p_resp) = ui.allocate_exact_size(

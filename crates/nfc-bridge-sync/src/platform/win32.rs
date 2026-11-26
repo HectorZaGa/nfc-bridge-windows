@@ -6,8 +6,8 @@ use tracing::warn;
 use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE, POINT, RECT};
 use windows_sys::Win32::Globalization::GetUserDefaultLocaleName;
 use windows_sys::Win32::Graphics::Dwm::{
-    DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
-    DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+    DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_CLOAK, DWMWA_TRANSITIONS_FORCEDISABLED,
+    DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
 };
 use windows_sys::Win32::Graphics::Gdi::{
     CreateSolidBrush, DeleteObject, GetMonitorInfoW, MonitorFromPoint, MONITORINFO,
@@ -26,7 +26,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     FindWindowW, GetCursorPos, GetWindowLongPtrW, GetWindowRect, IsIconic, IsWindowVisible,
     SetClassLongPtrW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    GCLP_HBRBACKGROUND, GWL_EXSTYLE, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
+    GCLP_HBRBACKGROUND, GWL_EXSTYLE, HWND_TOP, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
     SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, WS_EX_APPWINDOW, WS_EX_NOACTIVATE,
     WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
 };
@@ -241,6 +241,18 @@ fn find_hwnd_by_title(title: &str) -> windows_sys::Win32::Foundation::HWND {
     unsafe { FindWindowW(std::ptr::null(), wide.as_ptr()) }
 }
 
+unsafe fn set_dwm_bool_attr(hwnd: windows_sys::Win32::Foundation::HWND, attr: u32, val: bool) {
+    let flag: i32 = if val { 1 } else { 0 };
+    let _ = unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            attr,
+            &flag as *const i32 as *const _,
+            std::mem::size_of::<i32>() as u32,
+        )
+    };
+}
+
 /// Configura el popup del tray con `WS_EX_NOACTIVATE` y `WS_EX_TOOLWINDOW` para que nunca
 /// robe el foco de la bandeja de Windows (`^`) al abrirse o recibir clics.
 pub fn configure_tray_popup_win32(title: &str) {
@@ -249,6 +261,10 @@ pub fn configure_tray_popup_win32(title: &str) {
         return;
     }
     unsafe {
+        set_dwm_bool_attr(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED as u32, true);
+        if IsWindowVisible(hwnd) == 0 {
+            set_dwm_bool_attr(hwnd, DWMWA_CLOAK as u32, true);
+        }
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
         let desired = (ex & !(WS_EX_APPWINDOW as isize))
             | (WS_EX_NOACTIVATE as isize)
@@ -260,8 +276,57 @@ pub fn configure_tray_popup_win32(title: &str) {
     }
 }
 
-/// Muestra y posiciona el popup del tray sin activar ventana (`SWP_NOACTIVATE`),
-/// incluso si la ventana principal está minimizada o cerrada.
+/// Prepara y muestra un viewport oculto tras `DWMWA_CLOAK` en su posición final para que
+/// pinte su primer frame con `swap_buffers` antes de revelarse sin destello negro ni salto visual.
+pub fn prepare_cloaked_window_win32(
+    title: &str,
+    x_logical: f32,
+    y_logical: f32,
+    w_logical: f32,
+    h_logical: f32,
+    ppp: f32,
+) {
+    let hwnd = find_hwnd_by_title(title);
+    if hwnd.is_null() {
+        return;
+    }
+    let ppp = ppp.max(1.0);
+    let x_px = (x_logical * ppp).round() as i32;
+    let y_px = (y_logical * ppp).round() as i32;
+    let w_px = (w_logical * ppp).round().max(100.0) as i32;
+    let h_px = (h_logical * ppp).round().max(100.0) as i32;
+    unsafe {
+        set_dwm_bool_attr(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED as u32, true);
+        set_dwm_bool_attr(hwnd, DWMWA_CLOAK as u32, true);
+        SetWindowPos(
+            hwnd,
+            HWND_TOP,
+            x_px,
+            y_px,
+            w_px,
+            h_px,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER,
+        );
+    }
+}
+
+/// Quita `DWMWA_CLOAK` una vez completado el primer `swap_buffers` y opcionalmente enfoca la ventana.
+pub fn uncloak_window_win32(title: &str, focus: bool) {
+    let hwnd = find_hwnd_by_title(title);
+    if hwnd.is_null() {
+        return;
+    }
+    unsafe {
+        set_dwm_bool_attr(hwnd, DWMWA_CLOAK as u32, false);
+        if focus {
+            SetForegroundWindow(hwnd);
+        }
+    }
+}
+
+/// Muestra y posiciona el popup del tray sin activar ventana (`SWP_NOACTIVATE`).
+/// Cuando `cloak_before_show` es `true`, permanece invisible mediante `DWMWA_CLOAK` hasta el
+/// primer `swap_buffers` para evitar cualquier destello de 1 ms al abrir.
 pub fn show_tray_popup_at_win32(
     title: &str,
     click_x_px: i32,
@@ -269,6 +334,7 @@ pub fn show_tray_popup_at_win32(
     w_logical: f32,
     h_logical: f32,
     ppp: f32,
+    cloak_before_show: bool,
 ) -> Option<(f32, f32)> {
     let ppp = ppp.max(1.0);
     let w_px = (w_logical * ppp).round().max(100.0) as i32;
@@ -308,6 +374,9 @@ pub fn show_tray_popup_at_win32(
     if !hwnd.is_null() {
         configure_tray_popup_win32(title);
         unsafe {
+            if cloak_before_show {
+                set_dwm_bool_attr(hwnd, DWMWA_CLOAK as u32, true);
+            }
             SetWindowPos(
                 hwnd,
                 HWND_TOPMOST,
@@ -327,6 +396,7 @@ pub fn hide_tray_popup_win32(title: &str) {
     let hwnd = find_hwnd_by_title(title);
     if !hwnd.is_null() {
         unsafe {
+            set_dwm_bool_attr(hwnd, DWMWA_CLOAK as u32, true);
             ShowWindow(hwnd, SW_HIDE);
         }
     }

@@ -22,7 +22,7 @@ use crate::ipc::{DriverIpcClient, IpcCommand};
 #[cfg(windows)]
 use crate::platform::{
     configure_tray_popup_win32, current_tray_input_mask_win32, hide_tray_popup_win32,
-    restore_main_window_win32, show_tray_popup_at_win32,
+    prepare_cloaked_window_win32, restore_main_window_win32, show_tray_popup_at_win32,
 };
 use crate::updater::DesktopUpdater;
 use eframe::egui;
@@ -91,15 +91,17 @@ pub fn run_desktop_ui(
         options_open: false,
         options_just_opened: false,
         options_want_focus: false,
-        options_painted: false,
+        options_paint_stage: 0,
         options_target_pos: None,
         tray_open: false,
+        tray_paint_stage: 0,
         tray_input_mask: 0,
         tray_opened_at: None,
         tray_closed_at: None,
         tray_pos: None,
         tray_anchor_px: None,
         tray_devices_expanded: false,
+        tray_qr_expanded: false,
         tray_measured_height: None,
         should_quit: false,
         active_panel: "usb".to_string(),
@@ -214,7 +216,7 @@ pub fn run_desktop_ui(
                                     let ay = position.y.round() as i32;
                                     #[cfg(windows)]
                                     let clamped = show_tray_popup_at_win32(
-                                        &tray_t_ev, ax, ay, 296.0, est_h, ppp,
+                                        &tray_t_ev, ax, ay, 296.0, est_h, ppp, true,
                                     );
                                     #[cfg(not(windows))]
                                     let clamped: Option<(f32, f32)> = None;
@@ -227,6 +229,9 @@ pub fn run_desktop_ui(
                                         ),
                                     });
                                     g.tray_open = true;
+                                    g.tray_paint_stage = 1;
+                                    g.tray_devices_expanded = false;
+                                    g.tray_qr_expanded = false;
                                     #[cfg(windows)]
                                     {
                                         g.tray_input_mask = current_tray_input_mask_win32();
@@ -408,7 +413,7 @@ impl eframe::App for NfcBridgeEguiApp {
             options_open,
             options_just_opened,
             options_want_focus,
-            options_painted,
+            options_paint_stage,
             mut options_target_pos,
             tray_open,
             tray_pos,
@@ -420,7 +425,9 @@ impl eframe::App for NfcBridgeEguiApp {
             let mut g = self.core.lock().unwrap();
             if g.should_quit {
                 g.tray_open = false;
+                g.tray_paint_stage = 0;
                 g.options_open = false;
+                g.options_paint_stage = 0;
             }
             let pal = g.palette();
             let need_vis = g.last_visuals_pal != Some(pal);
@@ -452,7 +459,7 @@ impl eframe::App for NfcBridgeEguiApp {
                 g.options_open,
                 ojo,
                 owf,
-                g.options_painted,
+                g.options_paint_stage,
                 g.options_target_pos,
                 g.tray_open,
                 g.tray_pos,
@@ -489,21 +496,25 @@ impl eframe::App for NfcBridgeEguiApp {
             let mut g = self.core.lock().unwrap();
             if !options_open {
                 g.last_dwm_opts_key = None;
-                g.options_painted = false;
+                g.options_paint_stage = 0;
                 g.options_target_pos = None;
             }
             if !tray_open {
                 g.last_dwm_tray_key = None;
+                g.tray_paint_stage = 0;
             }
         }
 
+        // Mantener el viewport de Opciones pre-creado en memoria (oculto) y usar DWMWA_CLOAK al
+        // abrir para eliminar por completo el destello negro/fantasma de 1 ms.
+        let opt_id = ViewportId::from_hash_of("nb_options_viewport");
+        let opt_title = format!("{} - Options", main_title);
         if options_open {
-            let opt_id = ViewportId::from_hash_of("nb_options_viewport");
-            let opt_title = format!("{} - Options", main_title);
             if options_just_opened || options_target_pos.is_none() {
                 let tp = if main_visible {
                     if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
-                        if outer.min.x > -10000.0 && outer.min.y > -10000.0 && outer.width() > 200.0 {
+                        if outer.min.x > -10000.0 && outer.min.y > -10000.0 && outer.width() > 200.0
+                        {
                             Pos2::new(
                                 (outer.center().x - 340.0).max(20.0),
                                 (outer.center().y - 234.0).max(20.0),
@@ -525,31 +536,41 @@ impl eframe::App for NfcBridgeEguiApp {
                 self.core.lock().unwrap().options_target_pos = Some(tp);
                 options_target_pos = Some(tp);
             }
-            let mut vb = ViewportBuilder::default()
-                .with_title(opt_title.clone())
-                .with_inner_size([680.0, 468.0])
-                .with_decorations(false)
-                .with_resizable(false)
-                .with_transparent(false);
-            if !options_painted {
-                // Crear el HWND fuera de pantalla hasta que complete su primer swap_buffers
-                // para evitar el destello negro inicial al abrir Opciones.
-                vb = vb.with_position(Pos2::new(-32000.0, -32000.0));
-            } else if let Some(tp) = options_target_pos {
-                vb = vb.with_position(tp);
+            if options_paint_stage == 1 {
+                if let Some(tp) = options_target_pos {
+                    let ppp = ctx.pixels_per_point().max(1.0);
+                    #[cfg(windows)]
+                    prepare_cloaked_window_win32(&opt_title, tp.x, tp.y, 680.0, 468.0, ppp);
+                    ctx.request_repaint_of(opt_id);
+                }
             }
-            let core_opt = self.core.clone();
-            ctx.show_viewport_deferred(opt_id, vb, move |ui, _class| {
-                render_options_viewport(&core_opt, &opt_title, ui);
-            });
-            if !options_painted {
-                ctx.request_repaint_of(opt_id);
-            } else if options_want_focus {
-                ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Visible(true));
-                ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Minimized(false));
-                ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Focus);
-                ctx.request_repaint_of(opt_id);
-            }
+        }
+        let opt_pos = if options_open {
+            options_target_pos.unwrap_or(Pos2::new(240.0, 140.0))
+        } else {
+            Pos2::new(-32000.0, -32000.0)
+        };
+        let opt_vb = ViewportBuilder::default()
+            .with_title(opt_title.clone())
+            .with_inner_size([680.0, 468.0])
+            .with_position(opt_pos)
+            .with_visible(options_open)
+            .with_active(false)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_transparent(false);
+        let core_opt = self.core.clone();
+        let opt_title_cb = opt_title.clone();
+        ctx.show_viewport_deferred(opt_id, opt_vb, move |ui, _class| {
+            render_options_viewport(&core_opt, &opt_title_cb, ui);
+        });
+        if options_open && options_want_focus && options_paint_stage == 0 {
+            #[cfg(windows)]
+            restore_main_window_win32(&opt_title);
+            ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Focus);
+            ctx.request_repaint_of(opt_id);
         }
 
         // Mantener el viewport del tray pre-creado en memoria para apertura instantánea (<5 ms)
