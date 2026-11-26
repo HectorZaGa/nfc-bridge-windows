@@ -116,7 +116,7 @@ pub(crate) fn render_opt_appearance(
                                         let mut g = core.lock().unwrap();
                                         g.live.ui_settings.theme_mode = mode_k.to_string();
                                         g.persist_ui_settings();
-                                        super::super::repaint_active_from_core(ui.ctx(), core);
+                                        super::super::repaint_active_from_guard(ui.ctx(), &g);
                                     }
                                 }
                             });
@@ -243,7 +243,7 @@ pub(crate) fn render_opt_appearance(
                                         g.live.ui_settings.language = lk.to_string();
                                         g.language_dropdown_open = false;
                                         g.persist_ui_settings();
-                                        super::super::repaint_active_from_core(ui.ctx(), core);
+                                        super::super::repaint_active_from_guard(ui.ctx(), &g);
                                     }
                                 }
                             });
@@ -280,7 +280,7 @@ pub(crate) fn render_opt_appearance(
                         g.live.ui_settings.use_windows_accent =
                             !g.live.ui_settings.use_windows_accent;
                         g.persist_ui_settings();
-                        super::super::repaint_active_from_core(ui.ctx(), core);
+                        super::super::repaint_active_from_guard(ui.ctx(), &g);
                     }
                     ui.add_space(6.0);
                     let (wr, wg, wb) = parse_hex_rgb(&win_hex);
@@ -376,7 +376,7 @@ pub(crate) fn render_opt_appearance(
                             g.live.ui_settings.use_windows_accent = false;
                             g.live.ui_settings.custom_accent_hex = (*hex).to_string();
                             g.persist_ui_settings();
-                            super::super::repaint_active_from_core(ui.ctx(), core);
+                            super::super::repaint_active_from_guard(ui.ctx(), &g);
                         }
                         ui.add_space(4.0);
                     }

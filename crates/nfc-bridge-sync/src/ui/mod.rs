@@ -286,15 +286,8 @@ pub(crate) fn repaint_open_viewports(ctx: &egui::Context, options_open: bool, tr
     }
 }
 
-pub(crate) fn repaint_active_from_core(
-    ctx: &egui::Context,
-    core: &Arc<Mutex<SharedUiCore>>,
-) {
-    let (opt_open, tray_open) = {
-        let g = core.lock().unwrap();
-        (g.options_open, g.tray_open)
-    };
-    repaint_open_viewports(ctx, opt_open, tray_open);
+pub(crate) fn repaint_active_from_guard(ctx: &egui::Context, g: &SharedUiCore) {
+    repaint_open_viewports(ctx, g.options_open, g.tray_open);
 }
 
 struct NfcBridgeEguiApp {

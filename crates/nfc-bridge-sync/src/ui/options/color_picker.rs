@@ -262,7 +262,7 @@ pub(crate) fn render_hsv_color_popover(
                             g.live.ui_settings.custom_accent_hex = final_hex;
                             g.color_picker_open = false;
                             g.persist_ui_settings();
-                            super::super::repaint_active_from_core(ui.ctx(), core);
+                            super::super::repaint_active_from_guard(ui.ctx(), &g);
                             return;
                         }
                         ui.add_space(6.0);
