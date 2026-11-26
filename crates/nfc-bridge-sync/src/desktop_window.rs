@@ -25,13 +25,62 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
         MinimizeMain,
         CloseMain,
         ShowMain,
+        ReadyMain,
         ResizeMain(f64, f64),
         OpenSettings,
         DragSettings,
         MinimizeSettings,
         CloseSettings,
+        ReadySettings,
         ResizeSettings(f64, f64),
+        UiSettingsChanged,
+        ThemeChanged(bool),
         QuitApp,
+    }
+
+    fn apply_native_frameless_style(win: &Window, dark: bool) {
+        use tao::platform::windows::WindowExtWindows;
+        use windows_sys::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        };
+        use windows_sys::Win32::Graphics::Gdi::CreateSolidBrush;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SetClassLongPtrW, GCLP_HBRBACKGROUND};
+
+        let hwnd = win.hwnd() as windows_sys::Win32::Foundation::HWND;
+        if hwnd.is_null() {
+            return;
+        }
+        unsafe {
+            let corner_pref: u32 = DWMWCP_ROUND as u32;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                &corner_pref as *const _ as *const _,
+                std::mem::size_of::<u32>() as u32,
+            );
+            // COLORREF = 0x00BBGGRR: dark #313030 -> 0x00303031, light #D9DEE7 -> 0x00E7DED9
+            let border_color: u32 = if dark { 0x00303031 } else { 0x00E7DED9 };
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR as u32,
+                &border_color as *const _ as *const _,
+                std::mem::size_of::<u32>() as u32,
+            );
+            let dark_flag: i32 = if dark { 1 } else { 0 };
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
+                &dark_flag as *const _ as *const _,
+                std::mem::size_of::<i32>() as u32,
+            );
+            // Background brush: dark #121212 -> 0x00121212, light #F5F6F8 -> 0x00F8F6F5
+            let bg_color: u32 = if dark { 0x00121212 } else { 0x00F8F6F5 };
+            let brush = CreateSolidBrush(bg_color);
+            if !brush.is_null() {
+                SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, brush as isize);
+            }
+        }
     }
 
     fn build_nfc_rgba_icon() -> Option<(Vec<u8>, u32, u32)> {
@@ -80,10 +129,15 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
             ["drag_main"] => Some(UiWindowEvent::DragMain),
             ["minimize_main"] => Some(UiWindowEvent::MinimizeMain),
             ["close_main"] => Some(UiWindowEvent::CloseMain),
+            ["ready_main"] => Some(UiWindowEvent::ReadyMain),
             ["open_settings"] => Some(UiWindowEvent::OpenSettings),
             ["drag_settings"] => Some(UiWindowEvent::DragSettings),
             ["minimize_settings"] => Some(UiWindowEvent::MinimizeSettings),
             ["close_settings"] => Some(UiWindowEvent::CloseSettings),
+            ["ready_settings"] => Some(UiWindowEvent::ReadySettings),
+            ["ui_settings_changed"] => Some(UiWindowEvent::UiSettingsChanged),
+            ["theme", "dark"] => Some(UiWindowEvent::ThemeChanged(true)),
+            ["theme", "light"] => Some(UiWindowEvent::ThemeChanged(false)),
             ["resize_main", w, h] => {
                 if let (Ok(wf), Ok(hf)) = (w.parse::<f64>(), h.parse::<f64>()) {
                     Some(UiWindowEvent::ResizeMain(wf, hf))
@@ -120,12 +174,23 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
     let _ = std::fs::create_dir_all(&webview_data_dir);
     let web_ctx: Rc<RefCell<WebContext>> = Rc::new(RefCell::new(WebContext::new(Some(webview_data_dir))));
 
+    let init_dark = match crate::server::load_ui_settings().theme_mode.as_str() {
+        "light" => false,
+        _ => true,
+    };
+    let init_bg: (u8, u8, u8, u8) = if init_dark {
+        (18, 18, 18, 255)
+    } else {
+        (245, 246, 248, 255)
+    };
+
     let main_w = 860.0;
     let main_h = 566.0;
     let mut main_builder = WindowBuilder::new()
         .with_title(app_title)
         .with_decorations(false)
-        .with_transparent(true)
+        .with_transparent(false)
+        .with_visible(false)
         .with_resizable(false)
         .with_inner_size(LogicalSize::new(main_w, main_h));
     if let Some(ref ic) = window_icon {
@@ -141,19 +206,28 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
     }
 
     let main_window = main_builder.build(&event_loop)?;
+    apply_native_frameless_style(&main_window, init_dark);
+
     let main_url = format!("http://127.0.0.1:{}/?view=main", ui_port);
     let ipc_proxy_main = proxy.clone();
     let main_webview = {
         let mut ctx = web_ctx.borrow_mut();
         WebViewBuilder::new_with_web_context(&mut ctx)
-            .with_transparent(true)
-            .with_background_color((0, 0, 0, 0))
+            .with_transparent(false)
+            .with_background_color(init_bg)
             .with_url(&main_url)
             .with_ipc_handler(move |req| {
                 dispatch_ipc_cmd(&ipc_proxy_main, req.body());
             })
             .build(&main_window)?
     };
+
+    // Safety fallback reveal if WebView2 takes longer than expected on cold start
+    let fallback_proxy = proxy.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        let _ = fallback_proxy.send_event(UiWindowEvent::ReadyMain);
+    });
 
     // Bandeja del sistema opcional (abrir, opciones, salir)
     let tray_menu = Menu::new();
@@ -200,6 +274,8 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
     })));
 
     let main_id = main_window.id();
+    let mut main_shown = false;
+    let mut current_dark = init_dark;
     let mut settings_pair: Option<(Window, WebView)> = None;
     let settings_title = format!("{} - Options", app_title);
     let settings_url = format!("http://127.0.0.1:{}/?view=settings", ui_port);
@@ -216,8 +292,10 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                 if window_id == main_id {
                     settings_pair = None;
                     *control_flow = ControlFlow::Exit;
-                } else if settings_pair.as_ref().is_some_and(|(w, _)| w.id() == window_id) {
-                    settings_pair = None;
+                } else if let Some((ref win, _)) = settings_pair {
+                    if win.id() == window_id {
+                        win.set_visible(false);
+                    }
                 }
             }
             Event::UserEvent(user_evt) => match user_evt {
@@ -227,7 +305,15 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                 UiWindowEvent::MinimizeMain => {
                     main_window.set_minimized(true);
                 }
+                UiWindowEvent::ReadyMain => {
+                    if !main_shown {
+                        main_shown = true;
+                        main_window.set_visible(true);
+                        main_window.set_focus();
+                    }
+                }
                 UiWindowEvent::ShowMain => {
+                    main_shown = true;
                     main_window.set_visible(true);
                     main_window.set_minimized(false);
                     main_window.set_focus();
@@ -242,8 +328,25 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                     let clamped_h = h.clamp(420.0, 900.0);
                     main_window.set_inner_size(LogicalSize::new(clamped_w, clamped_h));
                 }
+                UiWindowEvent::UiSettingsChanged => {
+                    let _ = main_webview.evaluate_script(
+                        "if (window.__nbRefreshNow) window.__nbRefreshNow();",
+                    );
+                }
+                UiWindowEvent::ThemeChanged(is_dark) => {
+                    if current_dark != is_dark {
+                        current_dark = is_dark;
+                        apply_native_frameless_style(&main_window, is_dark);
+                        if let Some((ref win, _)) = settings_pair {
+                            apply_native_frameless_style(win, is_dark);
+                        }
+                    }
+                }
                 UiWindowEvent::OpenSettings => {
-                    if let Some((ref win, _)) = settings_pair {
+                    if let Some((ref win, ref sview)) = settings_pair {
+                        let _ = sview.evaluate_script(
+                            "if (window.__nbRefreshNow) window.__nbRefreshNow();",
+                        );
                         win.set_visible(true);
                         win.set_minimized(false);
                         win.set_focus();
@@ -253,7 +356,8 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                         let mut sb = WindowBuilder::new()
                             .with_title(&settings_title)
                             .with_decorations(false)
-                            .with_transparent(true)
+                            .with_transparent(false)
+                            .with_visible(false)
                             .with_resizable(false)
                             .with_inner_size(LogicalSize::new(sw, sh));
                         if let Some(ref ic) = window_icon {
@@ -269,11 +373,17 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                         }
                         match sb.build(elwt) {
                             Ok(swin) => {
+                                apply_native_frameless_style(&swin, current_dark);
+                                let bg = if current_dark {
+                                    (18, 18, 18, 255)
+                                } else {
+                                    (245, 246, 248, 255)
+                                };
                                 let ipc_proxy_s = proxy.clone();
                                 let mut ctx = web_ctx.borrow_mut();
                                 match WebViewBuilder::new_with_web_context(&mut ctx)
-                                    .with_transparent(true)
-                                    .with_background_color((0, 0, 0, 0))
+                                    .with_transparent(false)
+                                    .with_background_color(bg)
                                     .with_url(&settings_url)
                                     .with_ipc_handler(move |req| {
                                         dispatch_ipc_cmd(&ipc_proxy_s, req.body());
@@ -281,13 +391,25 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                                     .build(&swin)
                                 {
                                     Ok(sview) => {
-                                        swin.set_focus();
                                         settings_pair = Some((swin, sview));
+                                        let fallback_s = proxy.clone();
+                                        std::thread::spawn(move || {
+                                            std::thread::sleep(std::time::Duration::from_millis(800));
+                                            let _ = fallback_s.send_event(UiWindowEvent::ReadySettings);
+                                        });
                                     }
                                     Err(e) => warn!("No se pudo inicializar WebView de Opciones: {}", e),
                                 }
                             }
                             Err(e) => warn!("No se pudo crear ventana de Opciones: {}", e),
+                        }
+                    }
+                }
+                UiWindowEvent::ReadySettings => {
+                    if let Some((ref win, _)) = settings_pair {
+                        if !win.is_visible() {
+                            win.set_visible(true);
+                            win.set_focus();
                         }
                     }
                 }
@@ -302,7 +424,9 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                     }
                 }
                 UiWindowEvent::CloseSettings => {
-                    settings_pair = None;
+                    if let Some((ref win, _)) = settings_pair {
+                        win.set_visible(false);
+                    }
                 }
                 UiWindowEvent::ResizeSettings(w, h) => {
                     if let Some((ref win, _)) = settings_pair {

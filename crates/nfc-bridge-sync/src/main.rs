@@ -202,7 +202,12 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    std::thread::sleep(std::time::Duration::from_millis(140));
+    for _ in 0..40 {
+        if std::net::TcpStream::connect(("127.0.0.1", DEFAULT_UI_HTTP_PORT)).is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     #[cfg(target_os = "windows")]
     {
         nfc_bridge_sync::desktop_window::run_desktop_ui(

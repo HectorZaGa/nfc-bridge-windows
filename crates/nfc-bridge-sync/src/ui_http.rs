@@ -148,20 +148,80 @@ fn is_valid_relay_url(raw: &str) -> bool {
         || t.starts_with("ws://localhost")
 }
 
+async fn read_http_request(stream: &mut TcpStream) -> anyhow::Result<Option<(String, String)>> {
+    let mut buf: Vec<u8> = Vec::with_capacity(4096);
+    let mut tmp = [0u8; 4096];
+    let mut header_end: Option<usize> = None;
+    let mut content_length: usize = 0;
+    let mut sent_continue = false;
+
+    loop {
+        if let Some(h_end) = header_end {
+            if buf.len() >= h_end + content_length {
+                let header_str = String::from_utf8_lossy(&buf[..h_end - 4]).to_string();
+                let body_end = (h_end + content_length).min(buf.len());
+                let body_str = String::from_utf8_lossy(&buf[h_end..body_end]).to_string();
+                return Ok(Some((header_str, body_str)));
+            }
+        }
+
+        let n = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            stream.read(&mut tmp),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout reading HTTP request"))??;
+
+        if n == 0 {
+            if let Some(h_end) = header_end {
+                let header_str = String::from_utf8_lossy(&buf[..h_end - 4]).to_string();
+                let body_str = String::from_utf8_lossy(&buf[h_end..]).to_string();
+                return Ok(Some((header_str, body_str)));
+            }
+            return Ok(None);
+        }
+
+        buf.extend_from_slice(&tmp[..n]);
+        if header_end.is_none() {
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                let h_end = pos + 4;
+                header_end = Some(h_end);
+                let header_str = String::from_utf8_lossy(&buf[..pos]);
+                let mut expect_100 = false;
+                for line in header_str.lines().skip(1) {
+                    if let Some((k, v)) = line.split_once(':') {
+                        let key = k.trim();
+                        let val = v.trim();
+                        if key.eq_ignore_ascii_case("content-length") {
+                            content_length = val.parse::<usize>().unwrap_or(0).min(1024 * 1024);
+                        } else if key.eq_ignore_ascii_case("expect")
+                            && val.to_ascii_lowercase().contains("100-continue")
+                        {
+                            expect_100 = true;
+                        }
+                    }
+                }
+                if expect_100 && buf.len() < h_end + content_length && !sent_continue {
+                    sent_continue = true;
+                    let _ = stream.write_all(b"HTTP/1.1 100 Continue\r\n\r\n").await;
+                }
+            } else if buf.len() > 64 * 1024 {
+                anyhow::bail!("HTTP headers too large");
+            }
+        }
+    }
+}
+
 async fn handle_http_conn(
     mut stream: TcpStream,
     ipc: DriverIpcClient,
     updater: DesktopUpdater,
     port: u16,
 ) -> anyhow::Result<()> {
-    let mut buf = vec![0u8; 16 * 1024];
-    let n = stream.read(&mut buf).await?;
-    if n == 0 {
+    let Some((header_block, body_owned)) = read_http_request(&mut stream).await? else {
         return Ok(());
-    }
-
-    let req_str = String::from_utf8_lossy(&buf[..n]);
-    let header_block = req_str.split("\r\n\r\n").next().unwrap_or("");
+    };
+    let body = body_owned.trim_end_matches('\0');
     let mut lines = header_block.lines();
     let first_line = lines.next().unwrap_or_default();
     let mut parts = first_line.split_whitespace();
@@ -208,12 +268,6 @@ async fn handle_http_conn(
         stream.write_all(resp.as_bytes()).await?;
         return Ok(());
     }
-
-    let body = req_str
-        .split("\r\n\r\n")
-        .nth(1)
-        .unwrap_or("")
-        .trim_end_matches('\0');
 
     let clean_path = path.split('?').next().unwrap_or("/");
     let (status, content_type, resp_body) = match (method, clean_path) {
@@ -658,5 +712,55 @@ mod tests {
         assert!(resp2.contains("\"settings_language_system\""));
 
         server_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_split_packet_post_save_ui_settings() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let ipc = DriverIpcClient::new();
+        let updater = DesktopUpdater::new();
+        let prev_settings = ipc.get_live_state().await.ui_settings;
+
+        let ipc_srv = ipc.clone();
+        let server_task = tokio::spawn(async move {
+            for _ in 0..2 {
+                let (stream, _) = listener.accept().await.unwrap();
+                let ipc = ipc_srv.clone();
+                let updater = updater.clone();
+                handle_http_conn(stream, ipc, updater, port).await.unwrap();
+            }
+        });
+
+        // Simulate WebView2/Chromium splitting headers and JSON body into two TCP writes
+        let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let body = r##"{"command":"save_ui_settings","theme_mode":"light","language":"en","use_windows_accent":false,"custom_accent_hex":"#10B981"}"##;
+        let headers = format!(
+            "POST /api/command HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://127.0.0.1:{port}\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        s.write_all(headers.as_bytes()).await.unwrap();
+        s.flush().await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        s.write_all(body.as_bytes()).await.unwrap();
+        s.flush().await.unwrap();
+
+        let mut resp = String::new();
+        s.read_to_string(&mut resp).await.unwrap();
+        assert!(resp.starts_with("HTTP/1.1 200 OK\r\n"), "resp={resp}");
+        assert!(resp.contains(r#"{"ok":true}"#));
+
+        // Verify GET /api/state reflects updated settings
+        let mut s2 = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let req2 = format!("GET /api/state HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+        s2.write_all(req2.as_bytes()).await.unwrap();
+        let mut resp2 = String::new();
+        s2.read_to_string(&mut resp2).await.unwrap();
+        assert!(resp2.contains(r#""theme_mode":"light""#));
+        assert!(resp2.contains(r#""language":"en""#));
+        assert!(resp2.contains(r##""custom_accent_hex":"#10B981""##));
+
+        server_task.await.unwrap();
+        ipc.update_ui_settings(prev_settings).await;
     }
 }

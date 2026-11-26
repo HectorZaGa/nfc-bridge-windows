@@ -969,7 +969,7 @@ fn ui_settings_path() -> std::path::PathBuf {
         .join("sync_ui_settings.json")
 }
 
-fn load_ui_settings() -> SyncUiSettings {
+pub fn load_ui_settings() -> SyncUiSettings {
     std::fs::read_to_string(ui_settings_path())
         .ok()
         .and_then(|s| serde_json::from_str::<SyncUiSettings>(&s).ok())
