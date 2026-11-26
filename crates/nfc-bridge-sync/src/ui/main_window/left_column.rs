@@ -1,4 +1,6 @@
-use super::super::icons::{glyph, paint_chevron_y, paint_device_os_icon, paint_glyph, semibold};
+use super::super::icons::{
+    glyph, paint_chevron_y, paint_device_os_icon, paint_glyph, paint_two_line_centered, semibold,
+};
 use super::super::state::{OptionsTab, SharedUiCore};
 use super::super::theme::ThemePalette;
 use super::super::widgets::{paint_divider, small_accent_btn};
@@ -651,20 +653,17 @@ pub(crate) fn render_left_column(
             pal.accent,
         );
 
-        let tx = rect.left() + 38.0;
-        ui.painter().text(
-            Pos2::new(tx, rect.top() + 8.0),
-            egui::Align2::LEFT_TOP,
-            title,
+        paint_two_line_centered(
+            ui.painter(),
+            rect.left() + 38.0,
+            rect.center().y,
+            &title,
             semibold(13.5),
             pal.on_surface,
-        );
-        ui.painter().text(
-            Pos2::new(tx, rect.top() + 27.0),
-            egui::Align2::LEFT_TOP,
-            desc,
+            &desc,
             FontId::proportional(11.0),
             pal.on_surface_muted,
+            6.5,
         );
 
         paint_glyph(

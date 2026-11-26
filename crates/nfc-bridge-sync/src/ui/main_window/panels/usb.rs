@@ -1,10 +1,10 @@
-use super::super::super::icons::{glyph, paint_glyph, semibold};
+use super::super::super::icons::{glyph, paint_glyph, paint_two_line_centered, semibold};
 use super::super::super::state::SharedUiCore;
 use super::super::super::theme::ThemePalette;
 use super::super::super::widgets::{primary_cta_btn, toggle_state_btn};
 use super::{panel_header, panel_push_footer};
 use crate::ipc::IpcCommand;
-use egui::{CornerRadius, Margin, RichText, Sense, Stroke, StrokeKind, Vec2};
+use egui::{CornerRadius, FontId, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Vec2};
 use std::sync::{Arc, Mutex};
 
 pub(crate) fn render_panel_usb(
@@ -77,32 +77,29 @@ pub(crate) fn render_panel_usb(
         .corner_radius(CornerRadius::same(8))
         .inner_margin(Margin::same(16))
         .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.horizontal(|ui| {
-                let (ic_r, _) = ui.allocate_exact_size(Vec2::splat(40.0), Sense::hover());
-                ui.painter().rect(
-                    ic_r,
-                    CornerRadius::same(8),
-                    pal.accent_soft,
-                    Stroke::new(1.0, pal.accent_border),
-                    StrokeKind::Inside,
-                );
-                paint_glyph(ui.painter(), ic_r.center(), glyph::USB, 18.0, pal.accent);
-                ui.add_space(8.0);
-                ui.vertical(|ui| {
-                    ui.label(
-                        RichText::new(hero_title)
-                            .font(semibold(14.0))
-                            .color(pal.on_surface),
-                    );
-                    ui.label(
-                        RichText::new(hero_sub)
-                            .monospace()
-                            .size(11.0)
-                            .color(pal.on_surface_muted),
-                    );
-                });
-            });
+            let (row_r, _) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 40.0), Sense::hover());
+            let ic_r = Rect::from_min_size(row_r.min, Vec2::splat(40.0));
+            ui.painter().rect(
+                ic_r,
+                CornerRadius::same(8),
+                pal.accent_soft,
+                Stroke::new(1.0, pal.accent_border),
+                StrokeKind::Inside,
+            );
+            paint_glyph(ui.painter(), ic_r.center(), glyph::USB, 18.0, pal.accent);
+            paint_two_line_centered(
+                ui.painter(),
+                ic_r.right() + 12.0,
+                ic_r.center().y,
+                &hero_title,
+                semibold(14.0),
+                pal.on_surface,
+                &hero_sub,
+                FontId::monospace(11.0),
+                pal.on_surface_muted,
+                6.5,
+            );
         });
 
     ui.add_space(12.0);

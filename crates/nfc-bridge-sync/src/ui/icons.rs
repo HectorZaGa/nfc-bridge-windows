@@ -155,13 +155,77 @@ fn load_windows_font(candidates: &[&str]) -> Option<Vec<u8>> {
 pub fn paint_glyph(painter: &egui::Painter, center: Pos2, ch: char, size: f32, color: Color32) {
     let mut s = String::with_capacity(4);
     s.push(ch);
-    painter.text(
-        center,
-        egui::Align2::CENTER_CENTER,
-        s,
-        FontId::new(size, icon_family()),
-        color,
+    let gal = painter.layout_no_wrap(s, FontId::new(size, icon_family()), color);
+    let b = gal.mesh_bounds;
+    let cx = if b.is_finite() { b.center().x } else { gal.size().x * 0.5 };
+    let cy = if b.is_finite() { b.center().y } else { gal.size().y * 0.5 };
+    painter.galley(Pos2::new(center.x - cx, center.y - cy), gal, color);
+}
+
+pub fn paint_edit_off_glyph(
+    painter: &egui::Painter,
+    center: Pos2,
+    size: f32,
+    color: Color32,
+    cutout_bg: Color32,
+) {
+    paint_glyph(painter, center, glyph::EDIT, size, color);
+    let r = size * 0.34;
+    let p0 = Pos2::new(center.x - r, center.y - r);
+    let p1 = Pos2::new(center.x + r, center.y + r);
+    let off = Vec2::new(1.1, -1.1);
+    painter.line_segment(
+        [p0 + off, p1 + off],
+        Stroke::new((size * 0.18).max(2.6), cutout_bg),
     );
+    painter.line_segment(
+        [p0, p1],
+        Stroke::new((size * 0.095).max(1.45), color),
+    );
+}
+
+pub fn font_cap_bounds_y(painter: &egui::Painter, font: &FontId) -> (f32, f32) {
+    let h_gal = painter.layout_no_wrap("H".to_string(), font.clone(), Color32::WHITE);
+    let b = h_gal.mesh_bounds;
+    if b.is_finite() && b.height() > 0.5 {
+        (b.min.y, b.max.y)
+    } else {
+        (0.0, h_gal.size().y)
+    }
+}
+
+pub fn cap_center_offset_y(painter: &egui::Painter, font: &FontId) -> f32 {
+    let (top, bot) = font_cap_bounds_y(painter, font);
+    (top + bot) * 0.5
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn paint_two_line_centered(
+    painter: &egui::Painter,
+    x: f32,
+    center_y: f32,
+    title: &str,
+    title_font: FontId,
+    title_col: Color32,
+    desc: &str,
+    desc_font: FontId,
+    desc_col: Color32,
+    cap_gap: f32,
+) {
+    let (t_cap_top, t_cap_bot) = font_cap_bounds_y(painter, &title_font);
+    let (d_cap_top, d_cap_bot) = font_cap_bounds_y(painter, &desc_font);
+    let t_gal = painter.layout_no_wrap(title.to_string(), title_font, title_col);
+    let d_gal = painter.layout_no_wrap(desc.to_string(), desc_font, desc_col);
+
+    let title_cap_h = (t_cap_bot - t_cap_top).max(1.0);
+    let desc_cap_h = (d_cap_bot - d_cap_top).max(1.0);
+    let total_ink_h = title_cap_h + cap_gap + desc_cap_h;
+    let ink_top = center_y - total_ink_h * 0.5;
+    let title_y = ink_top - t_cap_top;
+    let desc_y = ink_top + title_cap_h + cap_gap - d_cap_top;
+
+    painter.galley(Pos2::new(x, title_y), t_gal, title_col);
+    painter.galley(Pos2::new(x, desc_y), d_gal, desc_col);
 }
 
 pub fn paint_chevron_y(painter: &egui::Painter, center: Pos2, up: bool, size: f32, color: Color32) {

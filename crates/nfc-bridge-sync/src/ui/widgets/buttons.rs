@@ -1,6 +1,19 @@
-use super::super::icons::paint_glyph;
+use super::super::icons::{cap_center_offset_y, paint_glyph};
 use super::super::theme::ThemePalette;
 use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
+
+fn paint_label_cap_centered(
+    painter: &egui::Painter,
+    x: f32,
+    center_y: f32,
+    label: &str,
+    font: FontId,
+    fg: Color32,
+) {
+    let dy = cap_center_offset_y(painter, &font);
+    let gal = painter.layout_no_wrap(label.to_string(), font, fg);
+    painter.galley(Pos2::new(x, center_y - dy), gal, fg);
+}
 
 pub(crate) fn paint_chrome_btn(
     painter: &egui::Painter,
@@ -51,23 +64,25 @@ pub(crate) fn toggle_state_btn(
         16.0,
         if on { pal.accent } else { pal.on_surface_muted },
     );
-    ui.painter().text(
-        Pos2::new(r.left() + 34.0, r.center().y),
-        egui::Align2::LEFT_CENTER,
+    paint_label_cap_centered(
+        ui.painter(),
+        r.left() + 34.0,
+        r.center().y,
         label,
         FontId::proportional(12.0),
         pal.on_surface,
     );
-    ui.painter().text(
-        Pos2::new(r.right() - 12.0, r.center().y),
-        egui::Align2::RIGHT_CENTER,
-        state_txt,
-        FontId::monospace(10.0),
-        if on {
-            pal.led_green
-        } else {
-            pal.on_surface_muted
-        },
+    let state_font = FontId::monospace(10.0);
+    let state_dy = cap_center_offset_y(ui.painter(), &state_font);
+    let state_gal = ui.painter().layout_no_wrap(
+        state_txt.to_string(),
+        state_font,
+        if on { pal.led_green } else { pal.on_surface_muted },
+    );
+    ui.painter().galley(
+        Pos2::new(r.right() - 12.0 - state_gal.size().x, r.center().y - state_dy),
+        state_gal,
+        if on { pal.led_green } else { pal.on_surface_muted },
     );
     resp.clicked()
 }
@@ -106,14 +121,14 @@ pub(crate) fn primary_cta_btn(
         StrokeKind::Inside,
     );
 
-    let gal = ui
-        .painter()
-        .layout_no_wrap(label.to_string(), FontId::proportional(14.0), fg);
+    let font = FontId::proportional(14.0);
+    let dy = cap_center_offset_y(ui.painter(), &font);
+    let gal = ui.painter().layout_no_wrap(label.to_string(), font, fg);
     let total_w = 22.0 + gal.size().x;
     let x0 = r.center().x - total_w * 0.5;
     paint_glyph(ui.painter(), Pos2::new(x0 + 8.0, r.center().y), ic, 16.0, fg);
     ui.painter()
-        .galley(Pos2::new(x0 + 22.0, r.center().y - gal.size().y * 0.5), gal, fg);
+        .galley(Pos2::new(x0 + 22.0, r.center().y - dy), gal, fg);
     resp.clicked()
 }
 
@@ -145,9 +160,11 @@ fn centered_icon_btn(
         },
         StrokeKind::Inside,
     );
+    let font = FontId::proportional(12.0);
+    let dy = cap_center_offset_y(ui.painter(), &font);
     let gal = ui
         .painter()
-        .layout_no_wrap(label.to_string(), FontId::proportional(12.0), st.fg);
+        .layout_no_wrap(label.to_string(), font, st.fg);
     let total_w = 22.0 + gal.size().x;
     let x0 = r.center().x - total_w * 0.5;
     paint_glyph(
@@ -157,11 +174,8 @@ fn centered_icon_btn(
         16.0,
         st.icon_color,
     );
-    ui.painter().galley(
-        Pos2::new(x0 + 22.0, r.center().y - gal.size().y * 0.5),
-        gal,
-        st.fg,
-    );
+    ui.painter()
+        .galley(Pos2::new(x0 + 22.0, r.center().y - dy), gal, st.fg);
     resp.clicked()
 }
 
@@ -214,9 +228,11 @@ pub(crate) fn small_ghost_btn(
     ic: char,
     label: &str,
 ) -> bool {
+    let font = FontId::proportional(12.0);
+    let dy = cap_center_offset_y(ui.painter(), &font);
     let gal = ui
         .painter()
-        .layout_no_wrap(label.to_string(), FontId::proportional(12.0), pal.on_surface);
+        .layout_no_wrap(label.to_string(), font, pal.on_surface);
     let w = gal.size().x + 32.0;
     let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
     if resp.hovered() {
@@ -230,11 +246,8 @@ pub(crate) fn small_ghost_btn(
         15.0,
         pal.on_surface_muted,
     );
-    ui.painter().galley(
-        Pos2::new(r.left() + 24.0, r.center().y - gal.size().y * 0.5),
-        gal,
-        pal.on_surface,
-    );
+    ui.painter()
+        .galley(Pos2::new(r.left() + 24.0, r.center().y - dy), gal, pal.on_surface);
     resp.clicked()
 }
 
@@ -255,11 +268,14 @@ pub(crate) fn small_accent_btn(
             pal.accent
         },
     );
-    ui.painter().text(
-        r.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        FontId::proportional(12.0),
+    let font = FontId::proportional(12.0);
+    let dy = cap_center_offset_y(ui.painter(), &font);
+    let gal = ui
+        .painter()
+        .layout_no_wrap(label.to_string(), font, pal.on_accent);
+    ui.painter().galley(
+        Pos2::new(r.center().x - gal.size().x * 0.5, r.center().y - dy),
+        gal,
         pal.on_accent,
     );
     resp.clicked()
@@ -284,11 +300,14 @@ pub(crate) fn small_secondary_btn(
         Stroke::new(1.0, pal.outline),
         StrokeKind::Inside,
     );
-    ui.painter().text(
-        r.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        FontId::proportional(12.0),
+    let font = FontId::proportional(12.0);
+    let dy = cap_center_offset_y(ui.painter(), &font);
+    let gal = ui
+        .painter()
+        .layout_no_wrap(label.to_string(), font, pal.on_surface);
+    ui.painter().galley(
+        Pos2::new(r.center().x - gal.size().x * 0.5, r.center().y - dy),
+        gal,
         pal.on_surface,
     );
     resp.clicked()
@@ -309,11 +328,14 @@ pub(crate) fn small_danger_btn(
         Stroke::new(1.0, pal.red_border),
         StrokeKind::Inside,
     );
-    ui.painter().text(
-        r.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        FontId::proportional(12.0),
+    let font = FontId::proportional(12.0);
+    let dy = cap_center_offset_y(ui.painter(), &font);
+    let gal = ui
+        .painter()
+        .layout_no_wrap(label.to_string(), font, pal.red_disconnect);
+    ui.painter().galley(
+        Pos2::new(r.center().x - gal.size().x * 0.5, r.center().y - dy),
+        gal,
         pal.red_disconnect,
     );
     resp.clicked()
@@ -330,9 +352,9 @@ pub(crate) fn switch_pill_btn(
     } else {
         pal.on_surface_muted
     };
-    let gal = ui
-        .painter()
-        .layout_no_wrap(label.to_string(), FontId::proportional(11.0), fg);
+    let font = FontId::proportional(11.0);
+    let dy = cap_center_offset_y(ui.painter(), &font);
+    let gal = ui.painter().layout_no_wrap(label.to_string(), font, fg);
     let w = (gal.size().x + 20.0).max(74.0);
     let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
     ui.painter().rect(
@@ -343,7 +365,7 @@ pub(crate) fn switch_pill_btn(
         StrokeKind::Inside,
     );
     ui.painter().galley(
-        Pos2::new(r.center().x - gal.size().x * 0.5, r.center().y - gal.size().y * 0.5),
+        Pos2::new(r.center().x - gal.size().x * 0.5, r.center().y - dy),
         gal,
         fg,
     );

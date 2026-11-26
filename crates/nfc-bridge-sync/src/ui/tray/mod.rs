@@ -1,6 +1,8 @@
 pub(crate) mod icon;
 
-use super::icons::{glyph, paint_device_os_icon, paint_glyph};
+use super::icons::{
+    cap_center_offset_y, glyph, paint_device_os_icon, paint_edit_off_glyph, paint_glyph,
+};
 use super::main_window::left_column::transport_glyph;
 use super::main_window::panels::trigger_qr_request;
 use super::state::{SharedUiCore, TraySubmenu};
@@ -568,10 +570,11 @@ pub(crate) fn render_tray_viewport(
                 } else {
                     None
                 };
-                let ro_r = tray_menu_item(
+                let ro_r = tray_menu_item_custom(
                     ui,
                     &pal,
-                    glyph::TUNE,
+                    glyph::EDIT,
+                    read_only_on,
                     if read_only_on {
                         pal.amber_pause
                     } else {
@@ -1094,33 +1097,59 @@ fn tray_menu_item(
     danger_hover: bool,
     force_active_bg: bool,
 ) -> TrayRowResp {
-    let (r, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 32.0), Sense::click());
-    if resp.hovered() || force_active_bg {
-        ui.painter().rect_filled(
-            r,
-            CornerRadius::same(8),
-            if danger_hover {
-                pal.red_soft
-            } else {
-                pal.surface_elevated
-            },
-        );
-    }
-    paint_glyph(
-        ui.painter(),
-        Pos2::new(r.left() + 18.0, r.center().y),
+    tray_menu_item_custom(
+        ui,
+        pal,
         ic,
-        16.0,
+        false,
         ic_col,
-    );
-    let font = FontId::proportional(if strong { 13.0 } else { 12.5 });
-    ui.painter().text(
-        Pos2::new(r.left() + 36.0, r.center().y),
-        egui::Align2::LEFT_CENTER,
         label,
-        font,
         lbl_col,
-    );
+        strong,
+        right_ic,
+        danger_hover,
+        force_active_bg,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn tray_menu_item_custom(
+    ui: &mut egui::Ui,
+    pal: &ThemePalette,
+    ic: char,
+    ic_crossed_out: bool,
+    ic_col: Color32,
+    label: &str,
+    lbl_col: Color32,
+    strong: bool,
+    right_ic: Option<(char, Color32)>,
+    danger_hover: bool,
+    force_active_bg: bool,
+) -> TrayRowResp {
+    let (r, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 32.0), Sense::click());
+    let hover_bg = if resp.hovered() || force_active_bg {
+        if danger_hover {
+            pal.red_soft
+        } else {
+            pal.surface_elevated
+        }
+    } else {
+        pal.surface_card
+    };
+    if resp.hovered() || force_active_bg {
+        ui.painter().rect_filled(r, CornerRadius::same(8), hover_bg);
+    }
+    let ic_center = Pos2::new(r.left() + 18.0, r.center().y);
+    if ic_crossed_out && ic == glyph::EDIT {
+        paint_edit_off_glyph(ui.painter(), ic_center, 16.0, ic_col, hover_bg);
+    } else {
+        paint_glyph(ui.painter(), ic_center, ic, 16.0, ic_col);
+    }
+    let font = FontId::proportional(if strong { 13.0 } else { 12.5 });
+    let dy = cap_center_offset_y(ui.painter(), &font);
+    let gal = ui.painter().layout_no_wrap(label.to_string(), font, lbl_col);
+    ui.painter()
+        .galley(Pos2::new(r.left() + 36.0, r.center().y - dy), gal, lbl_col);
     if let Some((ric, rcol)) = right_ic {
         paint_glyph(
             ui.painter(),
