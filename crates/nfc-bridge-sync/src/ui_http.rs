@@ -51,6 +51,8 @@ struct CommandRequest {
     auto_update_app: Option<bool>,
     #[serde(default)]
     auto_update_driver: Option<bool>,
+    #[serde(default)]
+    language: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -213,11 +215,22 @@ async fn handle_http_conn(
         .unwrap_or("")
         .trim_end_matches('\0');
 
-    let (status, content_type, resp_body) = match (method, path) {
+    let clean_path = path.split('?').next().unwrap_or("/");
+    let (status, content_type, resp_body) = match (method, clean_path) {
         ("GET", "/") | ("GET", "/index.html") => (
             "200 OK",
             "text/html; charset=utf-8",
             EmbeddedUi::INDEX_HTML.to_string(),
+        ),
+        ("GET", "/i18n/en.json") => (
+            "200 OK",
+            "application/json; charset=utf-8",
+            EmbeddedUi::EN_I18N_JSON.to_string(),
+        ),
+        ("GET", "/i18n/es.json") => (
+            "200 OK",
+            "application/json; charset=utf-8",
+            EmbeddedUi::ES_I18N_JSON.to_string(),
         ),
         ("GET", "/api/state") => {
             let _ = ipc.send_command(IpcCommand::GetTransportSnapshot).await;
@@ -400,6 +413,7 @@ async fn handle_http_conn(
                             auto_update_driver: req
                                 .auto_update_driver
                                 .unwrap_or(cur.auto_update_driver),
+                            language: req.language.unwrap_or(cur.language),
                         };
                         ipc.update_ui_settings(updated).await;
                         Ok(())
@@ -580,5 +594,69 @@ mod tests {
         assert!(is_valid_relay_url("https://nfc-bridge-relay.example.workers.dev"));
         assert!(!is_valid_relay_url("ws://public.example.com"));
         assert!(is_valid_relay_url("ws://127.0.0.1:8787"));
+    }
+
+    #[test]
+    fn test_embedded_i18n_catalogs_are_valid_and_in_sync() {
+        let en: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(EmbeddedUi::EN_I18N_JSON).expect("en.json should parse");
+        let es: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(EmbeddedUi::ES_I18N_JSON).expect("es.json should parse");
+
+        for required in [
+            "title_options_sync",
+            "title_options_tools",
+            "settings_appearance_header",
+            "settings_language_system",
+            "settings_language_en",
+            "settings_language_es",
+            "settings_mode_portable",
+            "nav_appearance",
+        ] {
+            assert!(en.contains_key(required), "en.json missing {required}");
+            assert!(es.contains_key(required), "es.json missing {required}");
+        }
+
+        let en_keys: std::collections::BTreeSet<_> = en.keys().cloned().collect();
+        let es_keys: std::collections::BTreeSet<_> = es.keys().cloned().collect();
+        assert_eq!(en_keys, es_keys, "en.json and es.json key sets must match");
+    }
+
+    #[tokio::test]
+    async fn test_http_routes_serve_settings_query_and_i18n() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let ipc = DriverIpcClient::new();
+        let updater = DesktopUpdater::new();
+
+        let server_task = tokio::spawn(async move {
+            for _ in 0..2 {
+                let (stream, _) = listener.accept().await.unwrap();
+                let ipc = ipc.clone();
+                let updater = updater.clone();
+                handle_http_conn(stream, ipc, updater, port).await.unwrap();
+            }
+        });
+
+        // 1. GET /?view=settings -> 200 OK text/html
+        let mut s1 = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let req1 = format!("GET /?view=settings HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+        s1.write_all(req1.as_bytes()).await.unwrap();
+        let mut resp1 = String::new();
+        s1.read_to_string(&mut resp1).await.unwrap();
+        assert!(resp1.starts_with("HTTP/1.1 200 OK\r\n"), "resp1={}", &resp1[..resp1.len().min(120)]);
+        assert!(resp1.contains("Content-Type: text/html; charset=utf-8"));
+        assert!(resp1.contains("settings-sidebar"));
+
+        // 2. GET /i18n/en.json -> 200 OK application/json
+        let mut s2 = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let req2 = format!("GET /i18n/en.json HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+        s2.write_all(req2.as_bytes()).await.unwrap();
+        let mut resp2 = String::new();
+        s2.read_to_string(&mut resp2).await.unwrap();
+        assert!(resp2.starts_with("HTTP/1.1 200 OK\r\n"));
+        assert!(resp2.contains("\"settings_language_system\""));
+
+        server_task.await.unwrap();
     }
 }

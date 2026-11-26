@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 static PAYLOAD_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/payload.bin"));
+static WEBVIEW2_LOADER_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/webview2loader.bin"));
 const PRODUCT_SLUG: &str = env!("NFC_INSTALLER_PRODUCT");
 const PRODUCT_VERSION: &str = env!("NFC_INSTALLER_VERSION");
 
@@ -212,6 +213,12 @@ fn run_install(meta: ProductMeta, silent: bool, auto_relaunch: bool) -> Result<(
     let target_exe = dir.join(meta.exe_filename);
     std::fs::write(&target_exe, PAYLOAD_BYTES)
         .map_err(|e| format!("No se pudo copiar ejecutable (ejecuta como administrador si es el Driver): {}", e))?;
+
+    if !WEBVIEW2_LOADER_BYTES.is_empty() {
+        let wv2_path = dir.join("WebView2Loader.dll");
+        std::fs::write(&wv2_path, WEBVIEW2_LOADER_BYTES)
+            .map_err(|e| format!("No se pudo copiar WebView2Loader.dll: {}", e))?;
+    }
 
     let uninstaller_exe = dir.join("uninstaller.exe");
     if let Ok(self_exe) = std::env::current_exe() {

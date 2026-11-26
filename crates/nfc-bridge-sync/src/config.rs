@@ -136,4 +136,6 @@ impl EmbeddedUi {
     pub const INDEX_HTML: &'static str = include_str!("../ui/index.html");
     pub const TRAY_HTML: &'static str = include_str!("../ui/tray.html");
     pub const CASES_HTML: &'static str = include_str!("../ui/cases.html");
+    pub const EN_I18N_JSON: &'static str = include_str!("../ui/i18n/en.json");
+    pub const ES_I18N_JSON: &'static str = include_str!("../ui/i18n/es.json");
 }

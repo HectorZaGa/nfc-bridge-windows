@@ -1,4 +1,5 @@
 pub mod config;
+pub mod desktop_window;
 pub mod driver_manager;
 pub mod server;
 pub mod ui_http;

@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use anyhow::Result;
 use nfc_bridge_sync::ui_http::DEFAULT_UI_HTTP_PORT;
 use nfc_bridge_sync::updater::cleanup_stale_update_files;
@@ -83,8 +85,7 @@ fn replace_previous_sync_processes() -> usize {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     cleanup_stale_update_files();
     let killed_prev_sync = replace_previous_sync_processes();
     if killed_prev_sync > 0 {
@@ -98,22 +99,16 @@ async fn main() -> Result<()> {
 
     let config = AppConfig::load_or_default();
     let local_ip = get_local_ip().unwrap_or_else(|| "127.0.0.1".to_string());
+    let headless = std::env::args().any(|a| a == "--headless");
 
-    println!("==================================================");
-    println!(
-        "   NFC Bridge Sync - Windows Lite v{} ({})",
+    info!(
+        "NFC Bridge Sync v{} ({}) | IP={} | PC={} | UI=http://127.0.0.1:{}",
         env!("CARGO_PKG_VERSION"),
-        env!("NFC_BRIDGE_BUILD_ID")
+        env!("NFC_BRIDGE_BUILD_ID"),
+        local_ip,
+        config.pc_name,
+        DEFAULT_UI_HTTP_PORT
     );
-    if config.is_portable {
-        println!("             [ MODO PORTABLE ACTIVO ]             ");
-    }
-    println!("==================================================");
-    println!(" [IP de esta PC] : {}", local_ip);
-    println!(" [Identidad PC]  : {}", config.pc_name);
-    println!(" [Panel Web/UI]  : http://127.0.0.1:{}", DEFAULT_UI_HTTP_PORT);
-    println!(" [Arquitectura]  : Cliente Visual IPC -> Driver");
-    println!("==================================================");
 
     info!("Directorio de datos: {:?}", config.data_dir);
     info!(
@@ -126,9 +121,14 @@ async fn main() -> Result<()> {
 
     if status == DriverStatus::InstalledStopped {
         info!("Servicio NFC Bridge Driver instalado pero detenido. Intentando iniciar...");
-        let _ = std::process::Command::new("sc.exe")
-            .args(["start", "NfcBridgeDriver"])
-            .output();
+        let mut sc = std::process::Command::new("sc.exe");
+        sc.args(["start", "NfcBridgeDriver"]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            sc.creation_flags(0x0800_0000);
+        }
+        let _ = sc.output();
         std::thread::sleep(std::time::Duration::from_millis(600));
         status = driver_mgr.check_driver_status();
     }
@@ -155,45 +155,62 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Conectarse exclusivamente al driver vía Named Pipe IPC (nunca abre puertos de red por su cuenta)
+    let rt = tokio::runtime::Runtime::new()?;
     let ipc_client = DriverIpcClient::new();
     let updater = DesktopUpdater::new();
-    updater
-        .set_product_identity("sync", "NFC Bridge Sync", env!("CARGO_PKG_VERSION"))
-        .await;
+    rt.block_on(async {
+        updater
+            .set_product_identity("sync", "NFC Bridge Sync", env!("CARGO_PKG_VERSION"))
+            .await;
+    });
+
     let ui_server = DesktopUiServer::with_updater(
         ipc_client.clone(),
         updater.clone(),
         DEFAULT_UI_HTTP_PORT,
     );
-    tokio::spawn(async move {
-        ui_server.run().await;
+
+    let data_dir = config.data_dir.clone();
+    let runtime_handle = std::thread::spawn(move || {
+        rt.block_on(async move {
+            tokio::spawn(async move {
+                ui_server.run().await;
+            });
+
+            {
+                let updater_init = updater.clone();
+                let ipc_init = ipc_client.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(1600)).await;
+                    let live = ipc_init.get_live_state().await;
+                    updater_init
+                        .check_all(
+                            live.snapshot.driver_version,
+                            live.ui_settings.auto_update_app,
+                            live.ui_settings.auto_update_driver,
+                        )
+                        .await;
+                });
+            }
+
+            let _ = ipc_client.run_forever().await;
+        });
     });
 
+    if headless {
+        let _ = runtime_handle.join();
+        return Ok(());
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(140));
+    #[cfg(target_os = "windows")]
     {
-        let updater_init = updater.clone();
-        let ipc_init = ipc_client.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(1800)).await;
-            let live = ipc_init.get_live_state().await;
-            updater_init
-                .check_all(
-                    live.snapshot.driver_version,
-                    live.ui_settings.auto_update_app,
-                    live.ui_settings.auto_update_driver,
-                )
-                .await;
-        });
+        nfc_bridge_sync::desktop_window::run_desktop_ui(
+            "NFC Bridge Sync",
+            DEFAULT_UI_HTTP_PORT,
+            data_dir,
+        )?;
     }
-
-    if std::env::args().any(|a| a == "--open-ui" || a == "--ui") {
-        let url = format!("http://127.0.0.1:{}", DEFAULT_UI_HTTP_PORT);
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", "start", "", &url])
-            .spawn();
-    }
-
-    ipc_client.run_forever().await?;
 
     Ok(())
 }

@@ -210,6 +210,10 @@ pub struct TransportSnapshotData {
     pub trusted_devices: Vec<TrustedDeviceInfo>,
 }
 
+fn default_language() -> String {
+    "system".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncUiSettings {
     pub theme_mode: String,
@@ -219,6 +223,8 @@ pub struct SyncUiSettings {
     pub auto_update_app: bool,
     #[serde(default)]
     pub auto_update_driver: bool,
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 impl Default for SyncUiSettings {
@@ -229,6 +235,7 @@ impl Default for SyncUiSettings {
             custom_accent_hex: "#3B82F6".to_string(),
             auto_update_app: false,
             auto_update_driver: false,
+            language: default_language(),
         }
     }
 }
@@ -377,6 +384,10 @@ impl DriverIpcClient {
             custom_accent_hex: normalize_hex_color(&settings.custom_accent_hex),
             auto_update_app: settings.auto_update_app,
             auto_update_driver: settings.auto_update_driver,
+            language: match settings.language.as_str() {
+                "en" | "es" | "system" => settings.language,
+                _ => "system".to_string(),
+            },
         };
         save_ui_settings(&clean);
         let mut st = self.state.write().await;
