@@ -382,10 +382,9 @@ pub(crate) fn render_tray_viewport(
                             if let Some(ref os) = header_os {
                                 paint_device_os_icon(
                                     ui.painter(),
-                                    ic_r.shrink(9.0),
+                                    ic_r.shrink(7.5),
                                     os,
                                     ic_fg,
-                                    ic_bg,
                                 );
                             } else {
                                 paint_glyph(

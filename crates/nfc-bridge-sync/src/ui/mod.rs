@@ -8,6 +8,7 @@
 
 #![cfg(target_os = "windows")]
 
+mod brand_svg;
 mod icons;
 mod main_window;
 mod options;

@@ -218,56 +218,17 @@ pub fn paint_refresh_spin(
     ));
 }
 
-pub fn paint_device_os_icon(
-    painter: &egui::Painter,
-    rect: Rect,
-    os: &str,
-    color: Color32,
-    eye_bg: Color32,
-) {
-    let c = rect.center();
-    if os.eq_ignore_ascii_case("ios") {
-        paint_glyph(painter, c, glyph::PHONE_IPHONE, rect.height() * 0.9, color);
+use super::brand_svg::{paint_brand_icon, BrandIcon};
+
+pub fn paint_device_os_icon(painter: &egui::Painter, rect: Rect, os: &str, color: Color32) {
+    let icon = if os.eq_ignore_ascii_case("ios") {
+        BrandIcon::Apple
+    } else if os.eq_ignore_ascii_case("windows") {
+        BrandIcon::Windows
     } else {
-        let s = rect.height().min(rect.width()) / 24.0;
-        let ox = rect.left() + (rect.width() - 24.0 * s) * 0.5;
-        let oy = rect.top() + (rect.height() - 24.0 * s) * 0.5;
-        let cx = ox + 12.0 * s;
-        let base_y = oy + 17.0 * s;
-        let rx = 10.4 * s;
-        let ry = 8.4 * s;
-        let mut pts = Vec::with_capacity(22);
-        for i in 0..=20 {
-            let ang = std::f32::consts::PI * (i as f32 / 20.0);
-            pts.push(Pos2::new(cx - ang.cos() * rx, base_y - ang.sin() * ry));
-        }
-        painter.add(egui::Shape::convex_polygon(pts, color, Stroke::NONE));
-        let ant_stroke = Stroke::new((1.55 * s).max(1.1), color);
-        painter.line_segment(
-            [
-                Pos2::new(ox + 8.9 * s, oy + 9.2 * s),
-                Pos2::new(ox + 6.9 * s, oy + 5.7 * s),
-            ],
-            ant_stroke,
-        );
-        painter.line_segment(
-            [
-                Pos2::new(ox + 15.1 * s, oy + 9.2 * s),
-                Pos2::new(ox + 17.1 * s, oy + 5.7 * s),
-            ],
-            ant_stroke,
-        );
-        painter.circle_filled(
-            Pos2::new(ox + 8.3 * s, oy + 13.7 * s),
-            (1.35 * s).max(0.95),
-            eye_bg,
-        );
-        painter.circle_filled(
-            Pos2::new(ox + 15.7 * s, oy + 13.7 * s),
-            (1.35 * s).max(0.95),
-            eye_bg,
-        );
-    }
+        BrandIcon::Android
+    };
+    paint_brand_icon(painter, rect, icon, color);
 }
 
 pub fn paint_update_down_badge(

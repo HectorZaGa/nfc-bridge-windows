@@ -215,17 +215,11 @@ pub(crate) fn render_left_column(
                     StrokeKind::Inside,
                 );
                 if driver_online && (is_connected || has_dropdown) {
-                    let eye_bg = if is_connected {
-                        pal.surface_card
-                    } else {
-                        pal.surface_elevated
-                    };
                     paint_device_os_icon(
                         ui.painter(),
-                        icon_box.shrink(10.0),
+                        icon_box.shrink(8.0),
                         &device_os,
                         ic_fg,
-                        eye_bg,
                     );
                 } else {
                     paint_glyph(

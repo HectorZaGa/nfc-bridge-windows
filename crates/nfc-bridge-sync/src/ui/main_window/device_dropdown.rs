@@ -277,17 +277,11 @@ pub(crate) fn render_device_dropdown_overlay(
                                     } else {
                                         pal.on_surface_muted
                                     };
-                                    let os_eye_bg = if is_selected_saved || pointer_over_row {
-                                        pal.surface_elevated
-                                    } else {
-                                        pal.surface_card
-                                    };
                                     paint_device_os_icon(
                                         ui.painter(),
                                         os_r,
                                         dev.device_os.as_deref().unwrap_or("android"),
                                         os_col,
-                                        os_eye_bg,
                                     );
 
                                     let max_name_w = (right_limit - (text_left + 20.0)).max(50.0);
