@@ -12,10 +12,16 @@ pub(crate) fn styled_singleline_input(
     let (box_r, _) = ui.allocate_exact_size(Vec2::new(w, h), Sense::hover());
     let mut inner_resp: Option<egui::Response> = None;
     let mono = FontId::monospace(12.0);
-    let row_h = ui.fonts_mut(|f| f.row_height(&mono)).ceil().clamp(14.0, h - 4.0);
+    let text_h = ui
+        .painter()
+        .layout_no_wrap("Xg".to_string(), mono.clone(), pal.on_surface)
+        .size()
+        .y
+        .ceil()
+        .clamp(14.0, h - 4.0);
     let text_rect = Rect::from_center_size(
         box_r.center(),
-        Vec2::new((box_r.width() - 20.0).max(20.0), row_h),
+        Vec2::new((box_r.width() - 20.0).max(20.0), text_h),
     );
     ui.painter().rect(
         box_r,
@@ -34,9 +40,10 @@ pub(crate) fn styled_singleline_input(
             .max_rect(text_rect)
             .layout(Layout::left_to_right(Align::Center)),
         |ui| {
+            ui.set_clip_rect(box_r.shrink2(Vec2::new(9.0, 2.0)));
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             let te = ui.add_sized(
-                Vec2::new(text_rect.width(), row_h),
+                Vec2::new(text_rect.width(), text_h),
                 egui::TextEdit::singleline(buf)
                     .frame(egui::Frame::NONE)
                     .margin(Margin::ZERO)

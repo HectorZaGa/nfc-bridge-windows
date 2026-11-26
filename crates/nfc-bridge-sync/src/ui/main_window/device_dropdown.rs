@@ -5,8 +5,7 @@ use super::super::widgets::{styled_singleline_input, truncate_text_to_width};
 use super::left_column::transport_glyph;
 use crate::ipc::IpcCommand;
 use egui::{
-    Color32, CornerRadius, FontId, Id, Margin, Pos2, Rect, RichText, Sense, Stroke, StrokeKind,
-    Vec2,
+    Color32, CornerRadius, FontId, Id, Margin, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2,
 };
 use std::sync::{Arc, Mutex};
 
@@ -26,13 +25,17 @@ pub(crate) fn render_device_dropdown_overlay(
         latency_now,
         editing_id,
         mut editing_name,
-        empty_lbl,
         ph_lbl,
         short_disconn,
         short_paused,
     ) = {
-        let g = core.lock().unwrap();
+        let mut g = core.lock().unwrap();
         if !g.device_dropdown_open {
+            return;
+        }
+        if g.live.snapshot.trusted_devices.is_empty() {
+            g.device_dropdown_open = false;
+            g.editing_device_id = None;
             return;
         }
         (
@@ -44,7 +47,6 @@ pub(crate) fn render_device_dropdown_overlay(
             g.live.latency_ms,
             g.editing_device_id.clone(),
             g.editing_device_name.clone(),
-            g.t("device_dropdown_empty").to_string(),
             g.t("device_name_placeholder").to_string(),
             g.t("device_disconnected_short").to_string(),
             g.t("device_paused_short").to_string(),
@@ -82,14 +84,7 @@ pub(crate) fn render_device_dropdown_overlay(
                         .show(ui, |ui| {
                             ui.set_min_width(inner_w);
                             ui.set_max_width(inner_w);
-                            if devices.is_empty() {
-                                ui.label(
-                                    RichText::new(empty_lbl)
-                                        .size(12.0)
-                                        .color(pal.on_surface_muted),
-                                );
-                                return;
-                            }
+                            ui.spacing_mut().item_spacing = Vec2::ZERO;
                             for (idx, dev) in devices.iter().enumerate() {
                                 let is_active =
                                     connected_now && Some(&dev.device_id) == active_id.as_ref();
@@ -100,8 +95,10 @@ pub(crate) fn render_device_dropdown_overlay(
                                     editing_id.as_deref() == Some(dev.device_id.as_str());
                                 let show_check = is_active || is_selected_saved;
 
-                                let row_outer_rect =
-                                    Rect::from_min_size(ui.cursor().min, Vec2::new(inner_w, 48.0));
+                                let (row_outer_rect, _) = ui.allocate_exact_size(
+                                    Vec2::new(inner_w, 48.0),
+                                    Sense::hover(),
+                                );
                                 let pointer_over_row = is_editing
                                     || ui
                                         .ctx()
@@ -183,8 +180,9 @@ pub(crate) fn render_device_dropdown_overlay(
                                 if is_editing {
                                     let edit_left = tr_box.right() + 10.0;
                                     let edit_w = (ed_r.left() - 40.0 - edit_left).max(70.0);
+                                    let edit_y = content_r.center().y - 14.0;
                                     let edit_rect = Rect::from_min_size(
-                                        Pos2::new(edit_left, content_r.top()),
+                                        Pos2::new(edit_left, edit_y),
                                         Vec2::new(edit_w, 28.0),
                                     );
                                     let mut enter_pressed = false;
@@ -206,7 +204,7 @@ pub(crate) fn render_device_dropdown_overlay(
                                     core.lock().unwrap().editing_device_name = editing_name.clone();
 
                                     let save_r = Rect::from_min_size(
-                                        Pos2::new(edit_rect.right() + 4.0, content_r.top()),
+                                        Pos2::new(edit_rect.right() + 4.0, edit_y),
                                         Vec2::splat(28.0),
                                     );
                                     let save_resp = ui.interact(
@@ -443,7 +441,18 @@ pub(crate) fn render_device_dropdown_overlay(
                                     );
                                     if dl_resp.clicked() {
                                         let id = dev.device_id.clone();
-                                        let g = core.lock().unwrap();
+                                        let mut g = core.lock().unwrap();
+                                        g.live.snapshot.trusted_devices.retain(|d| d.device_id != id);
+                                        if g.live.snapshot.trusted_devices.is_empty() {
+                                            g.device_dropdown_open = false;
+                                            g.editing_device_id = None;
+                                        } else if g.editing_device_id.as_deref() == Some(id.as_str()) {
+                                            g.editing_device_id = None;
+                                        }
+                                        g.snapshot_dirty_until = Some(
+                                            std::time::Instant::now()
+                                                + std::time::Duration::from_millis(900),
+                                        );
                                         let ipc = g.ipc.clone();
                                         g.rt.spawn(async move {
                                             ipc.remove_saved_profile(&id).await;
@@ -456,7 +465,6 @@ pub(crate) fn render_device_dropdown_overlay(
                                     }
                                 }
 
-                                ui.allocate_exact_size(Vec2::new(inner_w, 48.0), Sense::hover());
                                 if idx < devices.len() - 1 {
                                     ui.add_space(4.0);
                                 }

@@ -268,10 +268,17 @@ fn spawn_state_sync_loop(
                 }
             }
             if changed {
-                ctx_bg.request_repaint();
+                repaint_all_viewports(&ctx_bg);
             }
         }
     });
+}
+
+pub(crate) fn repaint_all_viewports(ctx: &egui::Context) {
+    ctx.request_repaint();
+    ctx.request_repaint_of(ViewportId::ROOT);
+    ctx.request_repaint_of(ViewportId::from_hash_of("nb_options_viewport"));
+    ctx.request_repaint_of(ViewportId::from_hash_of("nb_tray_popup_viewport"));
 }
 
 struct NfcBridgeEguiApp {

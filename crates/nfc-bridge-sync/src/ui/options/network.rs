@@ -200,7 +200,7 @@ pub(crate) fn render_opt_network(
                             let rst_gal = ui.painter().layout_no_wrap(
                                 reset_lbl.clone(),
                                 FontId::proportional(11.0),
-                                pal.on_surface_muted,
+                                egui::Color32::PLACEHOLDER,
                             );
                             let rst_w = (rst_gal.size().x + 24.0).max(120.0);
                             let (rr, rresp) =

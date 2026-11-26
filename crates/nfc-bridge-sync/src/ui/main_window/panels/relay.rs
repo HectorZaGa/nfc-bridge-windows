@@ -86,8 +86,11 @@ pub(crate) fn render_panel_relay(
     );
     ui.add_space(4.0);
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
         let mut g = core.lock().unwrap();
-        let w = (ui.available_width() - 80.0).max(120.0);
+        let btn_w = 74.0;
+        let gap = 6.0;
+        let w = (ui.available_width() - btn_w - gap).max(120.0);
         styled_singleline_input(
             ui,
             pal,
@@ -96,8 +99,8 @@ pub(crate) fn render_panel_relay(
             36.0,
             "https://nfc-bridge.hectorzaga96.workers.dev",
         );
-        ui.add_space(6.0);
-        if small_secondary_btn(ui, pal, &save_lbl, 74.0, 36.0) {
+        ui.add_space(gap);
+        if small_secondary_btn(ui, pal, &save_lbl, btn_w, 36.0) {
             let trimmed = g.relay_url_buf.trim().to_string();
             let url_opt = if trimmed.is_empty() {
                 None

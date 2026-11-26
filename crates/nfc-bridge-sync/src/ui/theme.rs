@@ -46,14 +46,10 @@ impl ThemePalette {
             &settings.custom_accent_hex
         };
         let (r, g, b) = parse_hex_rgb(active_hex);
-        let lum = (0.299 * (r as f32) + 0.587 * (g as f32) + 0.114 * (b as f32)) / 255.0;
+        let rel_lum = relative_luminance(r, g, b);
 
         let accent = Color32::from_rgb(r, g, b);
-        let on_accent = if lum > 0.62 {
-            Color32::from_rgb(17, 24, 39)
-        } else {
-            Color32::WHITE
-        };
+        let on_accent = smart_on_accent(r, g, b);
 
         let accent_soft = if is_dark {
             Color32::from_rgba_unmultiplied(r, g, b, 46)
@@ -90,10 +86,11 @@ impl ThemePalette {
                 ((b as f32) + (255.0 - b as f32) * 0.45).round().min(255.0) as u8,
             )
         } else {
+            let factor = if rel_lum > 0.55 { 0.48 } else { 0.72 };
             Color32::from_rgb(
-                ((r as f32) * 0.72).round() as u8,
-                ((g as f32) * 0.72).round() as u8,
-                ((b as f32) * 0.72).round() as u8,
+                ((r as f32) * factor).round() as u8,
+                ((g as f32) * factor).round() as u8,
+                ((b as f32) * factor).round() as u8,
             )
         };
 
@@ -287,4 +284,28 @@ pub fn apply_win32_dwm_to_title(title: &str, pal: &ThemePalette) {
         (pal.outline.r(), pal.outline.g(), pal.outline.b()),
         pal.is_dark,
     );
+}
+
+fn srgb_to_linear(c: u8) -> f32 {
+    let s = (c as f32) / 255.0;
+    if s <= 0.04045 {
+        s / 12.92
+    } else {
+        ((s + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+pub fn relative_luminance(r: u8, g: u8, b: u8) -> f32 {
+    0.2126 * srgb_to_linear(r) + 0.7152 * srgb_to_linear(g) + 0.0722 * srgb_to_linear(b)
+}
+
+pub fn smart_on_accent(r: u8, g: u8, b: u8) -> Color32 {
+    let rel_lum = relative_luminance(r, g, b);
+    if rel_lum > 0.62 {
+        Color32::from_rgb(17, 24, 39)
+    } else if rel_lum > 0.46 {
+        Color32::from_rgb(31, 41, 55)
+    } else {
+        Color32::WHITE
+    }
 }

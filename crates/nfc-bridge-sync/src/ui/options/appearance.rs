@@ -77,10 +77,15 @@ pub(crate) fn render_opt_appearance(
                                 for (mode_k, ic, lbl_k) in choices {
                                     let lbl = { core.lock().unwrap().t(lbl_k).to_string() };
                                     let active = theme_mode == mode_k;
+                                    let fg = if active {
+                                        pal.on_accent
+                                    } else {
+                                        pal.on_surface_muted
+                                    };
                                     let lbl_gal = ui.painter().layout_no_wrap(
                                         lbl.clone(),
                                         FontId::proportional(11.0),
-                                        pal.on_surface,
+                                        fg,
                                     );
                                     let w = (lbl_gal.size().x + 34.0).max(66.0);
                                     let (r, resp) =
@@ -92,11 +97,6 @@ pub(crate) fn render_opt_appearance(
                                             pal.accent,
                                         );
                                     }
-                                    let fg = if active {
-                                        pal.on_accent
-                                    } else {
-                                        pal.on_surface_muted
-                                    };
                                     paint_glyph(
                                         ui.painter(),
                                         Pos2::new(r.left() + 14.0, r.center().y),
@@ -116,6 +116,7 @@ pub(crate) fn render_opt_appearance(
                                         let mut g = core.lock().unwrap();
                                         g.live.ui_settings.theme_mode = mode_k.to_string();
                                         g.persist_ui_settings();
+                                        super::super::repaint_all_viewports(ui.ctx());
                                     }
                                 }
                             });
@@ -242,6 +243,7 @@ pub(crate) fn render_opt_appearance(
                                         g.live.ui_settings.language = lk.to_string();
                                         g.language_dropdown_open = false;
                                         g.persist_ui_settings();
+                                        super::super::repaint_all_viewports(ui.ctx());
                                     }
                                 }
                             });
@@ -278,6 +280,7 @@ pub(crate) fn render_opt_appearance(
                         g.live.ui_settings.use_windows_accent =
                             !g.live.ui_settings.use_windows_accent;
                         g.persist_ui_settings();
+                        super::super::repaint_all_viewports(ui.ctx());
                     }
                     ui.add_space(6.0);
                     let (wr, wg, wb) = parse_hex_rgb(&win_hex);
@@ -310,8 +313,11 @@ pub(crate) fn render_opt_appearance(
                         ui.painter().circle_filled(eye_r.center(), 14.0, pal.accent);
                         ui.painter()
                             .circle_stroke(eye_r.center(), 15.5, Stroke::new(2.5, pal.accent));
-                        ui.painter()
-                            .circle_stroke(eye_r.center(), 13.0, Stroke::new(1.5, Color32::WHITE));
+                        ui.painter().circle_stroke(
+                            eye_r.center(),
+                            13.0,
+                            Stroke::new(1.5, pal.surface_card),
+                        );
                         paint_glyph(
                             ui.painter(),
                             eye_r.center(),
@@ -370,6 +376,7 @@ pub(crate) fn render_opt_appearance(
                             g.live.ui_settings.use_windows_accent = false;
                             g.live.ui_settings.custom_accent_hex = (*hex).to_string();
                             g.persist_ui_settings();
+                            super::super::repaint_all_viewports(ui.ctx());
                         }
                         ui.add_space(4.0);
                     }

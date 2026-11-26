@@ -6,7 +6,7 @@ mod updates;
 
 use super::icons::{glyph, paint_glyph, semibold};
 use super::state::{OptionsTab, SharedUiCore};
-use super::theme::{apply_win32_dwm_to_title, ThemePalette};
+use super::theme::{apply_egui_visuals, apply_win32_dwm_to_title, ThemePalette};
 use super::widgets::paint_chrome_btn;
 use color_picker::render_hsv_color_popover;
 use egui::{
@@ -54,16 +54,23 @@ pub(crate) fn render_options_viewport(
         ctx.request_repaint_of(ViewportId::ROOT);
     }
 
-    let pal = {
+    let (pal, needs_vis_before) = {
         let mut g = core.lock().unwrap();
         let pal = g.palette();
+        let need_vis = g.last_visuals_pal != Some(pal);
+        if need_vis {
+            g.last_visuals_pal = Some(pal);
+        }
         let dwm_key = (pal.is_dark, pal.outline);
         if g.last_dwm_opts_key != Some(dwm_key) {
             g.last_dwm_opts_key = Some(dwm_key);
             apply_win32_dwm_to_title(opt_title, &pal);
         }
-        pal
+        (pal, need_vis)
     };
+    if needs_vis_before {
+        apply_egui_visuals(&ctx, &pal);
+    }
 
     egui::Frame::new()
         .fill(pal.surface_card)
@@ -292,4 +299,25 @@ pub(crate) fn render_options_viewport(
 
             render_hsv_color_popover(core, ui, &pal);
         });
+
+    let pal_change = {
+        let mut g = core.lock().unwrap();
+        let pal_after = g.palette();
+        if pal_after != pal {
+            let dwm_key = (pal_after.is_dark, pal_after.outline);
+            g.last_visuals_pal = Some(pal_after);
+            g.last_dwm_opts_key = Some(dwm_key);
+            g.last_dwm_main_key = Some(dwm_key);
+            let main_title = g.app_title.clone();
+            Some((pal_after, main_title))
+        } else {
+            None
+        }
+    };
+    if let Some((pal_after, main_title)) = pal_change {
+        apply_egui_visuals(&ctx, &pal_after);
+        apply_win32_dwm_to_title(opt_title, &pal_after);
+        apply_win32_dwm_to_title(&main_title, &pal_after);
+        super::repaint_all_viewports(&ctx);
+    }
 }
