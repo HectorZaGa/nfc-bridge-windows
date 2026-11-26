@@ -1,5 +1,5 @@
 mod device_dropdown;
-mod left_column;
+pub(crate) mod left_column;
 mod modals;
 pub(crate) mod panels;
 

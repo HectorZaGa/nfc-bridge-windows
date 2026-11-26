@@ -1,6 +1,7 @@
 pub(crate) mod icon;
 
 use super::icons::{glyph, paint_glyph};
+use super::main_window::left_column::transport_glyph;
 use super::main_window::panels::trigger_qr_request;
 use super::state::SharedUiCore;
 use super::theme::{apply_win32_dwm_to_title, ThemePalette};
@@ -29,7 +30,7 @@ pub(crate) fn estimate_tray_height(g: &SharedUiCore) -> f32 {
             return measured;
         }
     }
-    let mut base = if has_multi { 336.0_f32 } else { 302.0_f32 };
+    let mut base = if has_multi { 339.0_f32 } else { 305.0_f32 };
     if dev_exp {
         base += (dev_count as f32) * 30.0;
     }
@@ -380,13 +381,33 @@ pub(crate) fn render_tray_viewport(
                                 pal.surface_elevated,
                             );
                         }
-                        ui.painter().text(
-                            Pos2::new(inner.left() + 8.0, inner.center().y),
-                            egui::Align2::LEFT_CENTER,
-                            &dev.device_name,
+                        let name_col = if is_act {
+                            pal.on_surface
+                        } else {
+                            pal.on_surface_muted
+                        };
+                        let name_gal = ui.painter().layout_no_wrap(
+                            dev.device_name.clone(),
                             FontId::proportional(11.5),
+                            name_col,
+                        );
+                        let max_name_w = (inner.width() - 48.0).max(60.0);
+                        let name_w = name_gal.size().x.min(max_name_w);
+                        let name_pos = Pos2::new(inner.left() + 8.0, inner.center().y - name_gal.size().y * 0.5);
+                        let name_clip = Rect::from_min_max(
+                            Pos2::new(inner.left() + 8.0, inner.top()),
+                            Pos2::new(inner.left() + 8.0 + max_name_w, inner.bottom()),
+                        );
+                        ui.painter()
+                            .with_clip_rect(name_clip)
+                            .galley(name_pos, name_gal, name_col);
+                        paint_glyph(
+                            ui.painter(),
+                            Pos2::new(inner.left() + 8.0 + name_w + 11.0, inner.center().y),
+                            transport_glyph(dev.transport.as_deref()),
+                            13.5,
                             if is_act {
-                                pal.on_surface
+                                pal.accent
                             } else {
                                 pal.on_surface_muted
                             },
@@ -628,7 +649,7 @@ pub(crate) fn render_tray_viewport(
             }
             });
 
-            let measured_h = (content_resp.response.rect.height() + 12.0).ceil();
+            let measured_h = (content_resp.response.rect.height() + 15.0).ceil();
             let cur_h = ctx.input(|i| {
                 i.viewport()
                     .inner_rect
