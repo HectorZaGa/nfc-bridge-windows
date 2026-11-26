@@ -9,8 +9,8 @@
 
 use crate::egui_i18n::I18nCatalog;
 use crate::egui_icons::{
-    glyph, paint_chevron_y, paint_device_os_icon, paint_glyph, paint_update_down_badge,
-    semibold, setup_fonts,
+    glyph, paint_chevron_y, paint_device_os_icon, paint_glyph, paint_refresh_spin,
+    paint_update_down_badge, semibold, setup_fonts,
 };
 use crate::egui_qr::paint_qr_box;
 use crate::egui_theme::{
@@ -100,6 +100,7 @@ struct SharedUiCore {
 
     // Misc
     copied_key: Option<(String, Instant)>,
+    upd_spin_until: Option<Instant>,
     restart_dismissed: bool,
     last_dwm_main_key: Option<(bool, Color32)>,
     last_dwm_opts_key: Option<(bool, Color32)>,
@@ -238,6 +239,7 @@ pub fn run_desktop_ui(
             "#F59E0B".to_string(),
         ],
         copied_key: None,
+        upd_spin_until: None,
         restart_dismissed: false,
         last_dwm_main_key: None,
         last_dwm_opts_key: None,
@@ -1459,11 +1461,13 @@ fn render_panel_relay(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
     ui.horizontal(|ui| {
         let mut g = core.lock().unwrap();
         let w = (ui.available_width() - 80.0).max(120.0);
-        ui.add_sized(
-            [w, 36.0],
-            egui::TextEdit::singleline(&mut g.relay_url_buf)
-                .font(FontId::monospace(12.0))
-                .hint_text("https://nfc-bridge.hectorzaga96.workers.dev"),
+        styled_singleline_input(
+            ui,
+            pal,
+            &mut g.relay_url_buf,
+            w,
+            36.0,
+            "https://nfc-bridge.hectorzaga96.workers.dev",
         );
         ui.add_space(6.0);
         if small_secondary_btn(ui, pal, &save_lbl, 74.0, 36.0) {
@@ -1479,12 +1483,74 @@ fn render_panel_relay(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
 
     if let Some(ref ll) = live_link {
         ui.add_space(8.0);
-        if info_copy_tile_w(ui, pal, ui.available_width(), &link_lbl, ll, copied_link) {
+        let secs_left = core
+            .lock()
+            .unwrap()
+            .live_relay_expires_at
+            .map(|exp| exp.saturating_duration_since(Instant::now()).as_secs())
+            .unwrap_or(90);
+        let countdown = format!("{}:{:02}", secs_left / 60, secs_left % 60);
+        let box_w = ui.available_width();
+        let (r, _) = ui.allocate_exact_size(Vec2::new(box_w, 48.0), Sense::hover());
+        ui.painter().rect(
+            r,
+            CornerRadius::same(8),
+            pal.surface_elevated,
+            Stroke::new(1.0, pal.outline),
+            StrokeKind::Inside,
+        );
+        // Fila superior: "Enlace temporal activo" + "1:29"
+        ui.painter().text(
+            Pos2::new(r.left() + 12.0, r.top() + 8.0),
+            egui::Align2::LEFT_TOP,
+            &link_lbl,
+            FontId::proportional(11.0),
+            pal.on_surface_muted,
+        );
+        ui.painter().text(
+            Pos2::new(r.right() - 12.0, r.top() + 8.0),
+            egui::Align2::RIGHT_TOP,
+            countdown,
+            FontId::monospace(11.0),
+            pal.accent,
+        );
+        // Fila inferior: URL truncada antes de "Copiar" + botón texto "Copiar"/"Copiado"
+        let copy_txt = if copied_link {
+            core.lock().unwrap().t("btn_copied").to_string()
+        } else {
+            copy_lbl.clone()
+        };
+        let copy_gal = ui.painter().layout_no_wrap(copy_txt.clone(), FontId::proportional(11.0), pal.accent);
+        let copy_rect = Rect::from_min_size(
+            Pos2::new(r.right() - 12.0 - copy_gal.size().x, r.top() + 25.0),
+            Vec2::new(copy_gal.size().x + 4.0, 16.0),
+        );
+        let copy_resp = ui.interact(copy_rect, Id::unique("relay_copy_link_btn"), Sense::click());
+        let max_url_w = (copy_rect.left() - (r.left() + 12.0) - 10.0).max(60.0);
+        let trunc_url = truncate_text_to_width(ui.painter(), ll, FontId::monospace(11.0), max_url_w);
+        ui.painter().text(
+            Pos2::new(r.left() + 12.0, r.top() + 26.0),
+            egui::Align2::LEFT_TOP,
+            trunc_url,
+            FontId::monospace(11.0),
+            pal.on_surface,
+        );
+        ui.painter().galley(
+            Pos2::new(copy_rect.left(), r.top() + 26.0),
+            copy_gal,
+            pal.accent,
+        );
+        if copy_resp.hovered() {
+            ui.painter().line_segment(
+                [Pos2::new(copy_rect.left(), r.top() + 39.0), Pos2::new(copy_rect.right() - 4.0, r.top() + 39.0)],
+                Stroke::new(1.0, pal.accent),
+            );
+        }
+        if copy_resp.clicked() {
             ui.ctx().copy_text(ll.clone());
             core.lock().unwrap().copied_key = Some(("relay_link".to_string(), Instant::now() + Duration::from_secs(2)));
         }
     }
-    let _ = copy_lbl;
 
     ui.add_space(8.0);
     ui.label(RichText::new(relay_desc).size(11.0).color(pal.on_surface_muted));
@@ -1621,11 +1687,18 @@ fn render_qr_panel(
         });
     });
 
-    ui.add_space(12.0);
+    let has_share = qr_opt.as_ref().is_some_and(|q| q.share_link.is_some());
+    let bottom_block_h = if qr_opt.is_some() {
+        if has_share { 112.0 } else { 76.0 }
+    } else {
+        36.0
+    };
+    let mid_space = (ui.available_height() - bottom_block_h - 192.0).max(16.0);
+    ui.add_space((mid_space * 0.5).clamp(6.0, 22.0));
 
-    // Caja QR centrada (176x176 px = w-44 h-44)
+    // Caja QR centrada (192x192 redondeada — estilo Rust preferido, espacios fieles al HTML)
     ui.vertical_centered(|ui| {
-        let (qr_rect, _) = ui.allocate_exact_size(Vec2::splat(176.0), Sense::hover());
+        let (qr_rect, _) = ui.allocate_exact_size(Vec2::splat(192.0), Sense::hover());
         if loading {
             ui.painter().rect_filled(qr_rect, CornerRadius::same(12), Color32::WHITE);
             ui.painter().text(
@@ -1651,7 +1724,14 @@ fn render_qr_panel(
         }
     });
 
-    ui.add_space(10.0);
+    let rem_below_qr = ui.available_height();
+    let needed_below = bottom_block_h;
+    if rem_below_qr > needed_below + 6.0 {
+        ui.add_space(((rem_below_qr - needed_below) * 0.5).clamp(6.0, 18.0));
+    } else {
+        ui.add_space(6.0);
+    }
+
     if let Some(ref qr) = qr_opt {
         let secs_left = qr.expires_at.saturating_duration_since(Instant::now()).as_secs();
         let mins = secs_left / 60;
@@ -1780,7 +1860,7 @@ fn render_device_dropdown_overlay(
         return;
     }
 
-    let dd_w = card_anchor_rect.width();
+    let inner_w = (card_anchor_rect.width() - 14.0).max(220.0);
     let dd_pos = Pos2::new(card_anchor_rect.left(), card_anchor_rect.bottom() + 4.0);
 
     let area_resp = egui::Area::new(Id::unique("nb_device_dropdown_area"))
@@ -1799,181 +1879,178 @@ fn render_device_dropdown_overlay(
                     color: Color32::from_black_alpha(140),
                 })
                 .show(ui, |ui| {
-                    ui.set_width((dd_w - 14.0).max(220.0));
-                    egui::ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
-                        if devices.is_empty() {
-                            ui.label(RichText::new(empty_lbl).size(12.0).color(pal.on_surface_muted));
-                            return;
-                        }
-                        for (idx, dev) in devices.iter().enumerate() {
-                            let is_active = connected_now && Some(&dev.device_id) == active_id.as_ref();
-                            let is_selected_saved = !connected_now
-                                && (Some(&dev.device_id) == selected_id.as_ref()
-                                    || (selected_id.is_none() && idx == 0));
-                            let is_editing = editing_id.as_deref() == Some(dev.device_id.as_str());
+                    ui.set_min_width(inner_w);
+                    ui.set_max_width(inner_w);
+                    egui::ScrollArea::vertical()
+                        .max_width(inner_w)
+                        .max_height(240.0)
+                        .show(ui, |ui| {
+                            ui.set_min_width(inner_w);
+                            ui.set_max_width(inner_w);
+                            if devices.is_empty() {
+                                ui.label(RichText::new(empty_lbl).size(12.0).color(pal.on_surface_muted));
+                                return;
+                            }
+                            for (idx, dev) in devices.iter().enumerate() {
+                                let is_active = connected_now && Some(&dev.device_id) == active_id.as_ref();
+                                let is_selected_saved = !connected_now
+                                    && (Some(&dev.device_id) == selected_id.as_ref()
+                                        || (selected_id.is_none() && idx == 0));
+                                let is_editing = editing_id.as_deref() == Some(dev.device_id.as_str());
+                                let show_check = is_active || is_selected_saved;
 
-                            let (row_bg, row_border, row_hover) = if is_active {
-                                (pal.accent_card_bg, pal.accent_border, false)
-                            } else if is_selected_saved {
-                                (pal.surface_elevated, pal.outline_variant, false)
-                            } else {
-                                (Color32::TRANSPARENT, Color32::TRANSPARENT, true)
-                            };
+                                // Rect exacto de la fila (48px alto) para hover instantáneo en toda la fila
+                                let row_outer_rect = Rect::from_min_size(ui.cursor().min, Vec2::new(inner_w, 48.0));
+                                let pointer_over_row = is_editing
+                                    || ui.ctx().pointer_hover_pos().is_some_and(|p| row_outer_rect.contains(p));
 
-                            let row_frame = egui::Frame::new()
-                                .fill(row_bg)
-                                .stroke(Stroke::new(1.0, row_border))
-                                .corner_radius(CornerRadius::same(8))
-                                .inner_margin(Margin::symmetric(10, 8));
+                                let (row_bg, row_border) = if is_active {
+                                    (pal.accent_card_bg, pal.accent_border)
+                                } else if is_selected_saved {
+                                    (pal.surface_elevated, pal.outline_variant)
+                                } else if pointer_over_row {
+                                    (pal.surface_elevated, Color32::TRANSPARENT)
+                                } else {
+                                    (Color32::TRANSPARENT, Color32::TRANSPARENT)
+                                };
 
-                            row_frame.show(ui, |ui| {
-                                ui.set_min_width(ui.available_width());
-                                ui.horizontal(|ui| {
-                                    // 1. LED de estado
-                                    let dot_c = if is_active {
-                                        if paused_now { pal.amber_pause } else { pal.led_green }
-                                    } else {
-                                        pal.red_disconnect
-                                    };
-                                    let (led_r, _) = ui.allocate_exact_size(Vec2::new(8.0, 32.0), Sense::hover());
-                                    ui.painter().circle_filled(led_r.center(), 4.0, dot_c);
-                                    ui.add_space(10.0);
+                                ui.painter().rect(
+                                    row_outer_rect,
+                                    CornerRadius::same(8),
+                                    row_bg,
+                                    Stroke::new(1.0, row_border),
+                                    StrokeKind::Inside,
+                                );
 
-                                    // 2. Caja 32x32 de icono de transporte (wifi / link / usb / bt / wfd)
-                                    let (tr_box, _) = ui.allocate_exact_size(Vec2::splat(32.0), Sense::hover());
-                                    let (tr_bg, tr_bd, tr_fg) = if is_active {
-                                        (pal.accent_soft, pal.accent_border, pal.accent)
-                                    } else {
-                                        (pal.surface_elevated, pal.outline, pal.on_surface_muted)
-                                    };
-                                    ui.painter().rect(
-                                        tr_box,
-                                        CornerRadius::same(8),
-                                        tr_bg,
-                                        Stroke::new(1.0, tr_bd),
-                                        StrokeKind::Inside,
-                                    );
-                                    let tr_ic = match dev.transport.as_deref() {
-                                        Some("usb") => glyph::USB,
-                                        Some("bluetooth") => glyph::BLUETOOTH,
-                                        Some("relay") => glyph::LINK,
-                                        Some("wifi_direct") => glyph::WIFI_TETHERING,
-                                        _ => glyph::WIFI,
-                                    };
-                                    paint_glyph(ui.painter(), tr_box.center(), tr_ic, 18.0, tr_fg);
-                                    ui.add_space(10.0);
+                                let content_r = row_outer_rect.shrink2(Vec2::new(10.0, 8.0));
+                                // 1. LED
+                                let dot_c = if is_active {
+                                    if paused_now { pal.amber_pause } else { pal.led_green }
+                                } else {
+                                    pal.red_disconnect
+                                };
+                                ui.painter().circle_filled(Pos2::new(content_r.left() + 4.0, content_r.center().y), 4.0, dot_c);
 
-                                    if is_editing {
-                                        let edit_w = (ui.available_width() - 96.0).max(80.0);
-                                        let te = ui.add_sized(
-                                            [edit_w, 28.0],
-                                            egui::TextEdit::singleline(&mut editing_name)
-                                                .font(FontId::proportional(12.0))
-                                                .hint_text(&ph_lbl),
-                                        );
-                                        core.lock().unwrap().editing_device_name = editing_name.clone();
-                                        let enter_pressed =
-                                            te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                        ui.add_space(4.0);
-                                        let (chk_r, chk_resp) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
-                                        ui.painter().rect_filled(chk_r, CornerRadius::same(8), pal.accent);
-                                        paint_glyph(ui.painter(), chk_r.center(), glyph::CHECK, 16.0, pal.on_accent);
-                                        if chk_resp.clicked() || enter_pressed {
-                                            let clean = editing_name.trim().to_string();
-                                            let mut g = core.lock().unwrap();
-                                            if !clean.is_empty() {
-                                                let id = dev.device_id.clone();
-                                                g.rt.spawn({
-                                                    let ipc = g.ipc.clone();
-                                                    let id_c = id.clone();
-                                                    let nm_c = clean.clone();
-                                                    async move {
-                                                        ipc.rename_saved_profile(&id_c, &nm_c).await;
-                                                        let _ = ipc.send_command(IpcCommand::RenameTrustedDevice { device_id: id_c, name: nm_c }).await;
-                                                    }
-                                                });
-                                            }
-                                            g.editing_device_id = None;
-                                        }
-                                        ui.add_space(4.0);
-                                    } else {
-                                        let show_check = is_active || is_selected_saved;
-                                        let right_reserve = if show_check { 86.0 } else { 64.0 };
-                                        let info_w = (ui.available_width() - right_reserve).max(90.0);
-                                        let (row_r, row_resp) =
-                                            ui.allocate_exact_size(Vec2::new(info_w, 32.0), Sense::click());
-                                        if row_hover && row_resp.hovered() {
-                                            ui.painter().rect_filled(
-                                                row_r.expand2(Vec2::new(6.0, 2.0)),
-                                                CornerRadius::same(6),
-                                                pal.surface_elevated,
-                                            );
-                                        }
-                                        // 3. Logo OS 14x14 + Nombre
-                                        let os_r = Rect::from_min_size(
-                                            Pos2::new(row_r.left(), row_r.top() + 2.0),
-                                            Vec2::splat(14.0),
-                                        );
-                                        let os_col = if is_active { pal.on_surface } else { pal.on_surface_muted };
-                                        let os_eye_bg = if is_selected_saved { pal.surface_elevated } else { pal.surface_card };
-                                        paint_device_os_icon(
-                                            ui.painter(),
-                                            os_r,
-                                            dev.device_os.as_deref().unwrap_or("android"),
-                                            os_col,
-                                            os_eye_bg,
-                                        );
-                                        ui.painter().text(
-                                            Pos2::new(row_r.left() + 20.0, row_r.top()),
-                                            egui::Align2::LEFT_TOP,
-                                            &dev.device_name,
-                                            semibold(14.0),
-                                            pal.on_surface,
-                                        );
-                                        // Sublinea mono: ID XXXX • Desconectado
-                                        let raw_id = dev.mobile_id.as_deref().filter(|s| !s.is_empty()).unwrap_or(&dev.device_id);
-                                        let st_part = if is_active {
-                                            if paused_now {
-                                                short_paused.as_str().to_string()
-                                            } else {
-                                                format!("{} ms", latency_now.max(1))
-                                            }
-                                        } else {
-                                            short_disconn.clone()
-                                        };
-                                        ui.painter().text(
-                                            Pos2::new(row_r.left(), row_r.top() + 18.0),
-                                            egui::Align2::LEFT_TOP,
-                                            format!("ID {} • {}", raw_id, st_part),
-                                            FontId::monospace(10.0),
-                                            pal.on_surface_muted,
-                                        );
-                                        if row_resp.clicked() {
+                                // 2. Caja transporte 32x32
+                                let tr_box = Rect::from_min_size(Pos2::new(content_r.left() + 18.0, content_r.top()), Vec2::splat(32.0));
+                                let (tr_bg, tr_bd, tr_fg) = if is_active {
+                                    (pal.accent_soft, pal.accent_border, pal.accent)
+                                } else {
+                                    (pal.surface_elevated, pal.outline, pal.on_surface_muted)
+                                };
+                                ui.painter().rect(
+                                    tr_box,
+                                    CornerRadius::same(8),
+                                    tr_bg,
+                                    Stroke::new(1.0, tr_bd),
+                                    StrokeKind::Inside,
+                                );
+                                let tr_ic = match dev.transport.as_deref() {
+                                    Some("usb") => glyph::USB,
+                                    Some("bluetooth") => glyph::BLUETOOTH,
+                                    Some("relay") => glyph::LINK,
+                                    Some("wifi_direct") => glyph::WIFI_TETHERING,
+                                    _ => glyph::WIFI,
+                                };
+                                paint_glyph(ui.painter(), tr_box.center(), tr_ic, 18.0, tr_fg);
+
+                                // 3. Zona derecha alineada fijamente en todas las filas (Delete, Edit, Check)
+                                let dl_r = Rect::from_min_size(Pos2::new(content_r.right() - 28.0, content_r.center().y - 14.0), Vec2::splat(28.0));
+                                let ed_r = Rect::from_min_size(Pos2::new(dl_r.left() - 32.0, content_r.center().y - 14.0), Vec2::splat(28.0));
+                                let chk_center_x = if pointer_over_row {
+                                    ed_r.left() - 14.0
+                                } else {
+                                    content_r.right() - 10.0
+                                };
+
+                                if is_editing {
+                                    let edit_left = tr_box.right() + 10.0;
+                                    let edit_w = (ed_r.left() - 40.0 - edit_left).max(70.0);
+                                    let edit_rect = Rect::from_min_size(Pos2::new(edit_left, content_r.top()), Vec2::new(edit_w, 28.0));
+                                    let mut enter_pressed = false;
+                                    ui.scope_builder(egui::UiBuilder::new().max_rect(edit_rect), |ui| {
+                                        let te = styled_singleline_input(ui, pal, &mut editing_name, edit_w, 28.0, &ph_lbl);
+                                        enter_pressed = te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                    });
+                                    core.lock().unwrap().editing_device_name = editing_name.clone();
+
+                                    let save_r = Rect::from_min_size(Pos2::new(edit_rect.right() + 4.0, content_r.top()), Vec2::splat(28.0));
+                                    let save_resp = ui.interact(save_r, Id::unique(("dd_save", &dev.device_id)), Sense::click());
+                                    ui.painter().rect_filled(save_r, CornerRadius::same(8), pal.accent);
+                                    paint_glyph(ui.painter(), save_r.center(), glyph::CHECK, 16.0, pal.on_accent);
+                                    if save_resp.clicked() || enter_pressed {
+                                        let clean = editing_name.trim().to_string();
+                                        let mut g = core.lock().unwrap();
+                                        if !clean.is_empty() {
                                             let id = dev.device_id.clone();
-                                            let mut g = core.lock().unwrap();
-                                            g.device_dropdown_open = false;
-                                            let ipc = g.ipc.clone();
-                                            g.rt.spawn(async move {
-                                                ipc.select_saved_profile(&id).await;
-                                                let _ = ipc.send_command(IpcCommand::SelectTrustedDevice { device_id: id }).await;
+                                            g.rt.spawn({
+                                                let ipc = g.ipc.clone();
+                                                let id_c = id.clone();
+                                                let nm_c = clean.clone();
+                                                async move {
+                                                    ipc.rename_saved_profile(&id_c, &nm_c).await;
+                                                    let _ = ipc.send_command(IpcCommand::RenameTrustedDevice { device_id: id_c, name: nm_c }).await;
+                                                }
                                             });
                                         }
+                                        g.editing_device_id = None;
+                                    }
+                                } else {
+                                    let text_left = tr_box.right() + 10.0;
+                                    let right_limit = if show_check {
+                                        chk_center_x - 14.0
+                                    } else if pointer_over_row {
+                                        ed_r.left() - 6.0
+                                    } else {
+                                        content_r.right() - 4.0
+                                    };
+                                    let click_rect = Rect::from_min_max(row_outer_rect.min, Pos2::new(if pointer_over_row { ed_r.left() - 4.0 } else { row_outer_rect.right() }, row_outer_rect.bottom()));
+                                    let row_resp = ui.interact(click_rect, Id::unique(("dd_row", &dev.device_id)), Sense::click());
 
-                                        if show_check {
-                                            let (chk_r, _) = ui.allocate_exact_size(Vec2::new(20.0, 28.0), Sense::hover());
-                                            paint_glyph(
-                                                ui.painter(),
-                                                chk_r.center(),
-                                                glyph::CHECK,
-                                                16.0,
-                                                if is_active { pal.accent } else { pal.on_surface_muted },
-                                            );
-                                            ui.add_space(2.0);
-                                        }
+                                    let os_r = Rect::from_min_size(Pos2::new(text_left, content_r.top() + 2.0), Vec2::splat(14.0));
+                                    let os_col = if is_active { pal.on_surface } else { pal.on_surface_muted };
+                                    let os_eye_bg = if is_selected_saved || pointer_over_row { pal.surface_elevated } else { pal.surface_card };
+                                    paint_device_os_icon(ui.painter(), os_r, dev.device_os.as_deref().unwrap_or("android"), os_col, os_eye_bg);
+
+                                    let max_name_w = (right_limit - (text_left + 20.0)).max(50.0);
+                                    let trunc_name = truncate_text_to_width(ui.painter(), &dev.device_name, semibold(14.0), max_name_w);
+                                    ui.painter().text(Pos2::new(text_left + 20.0, content_r.top()), egui::Align2::LEFT_TOP, trunc_name, semibold(14.0), pal.on_surface);
+
+                                    let raw_id = dev.mobile_id.as_deref().filter(|s| !s.is_empty()).unwrap_or(&dev.device_id);
+                                    let st_part = if is_active {
+                                        if paused_now { short_paused.as_str().to_string() } else { format!("{} ms", latency_now.max(1)) }
+                                    } else {
+                                        short_disconn.clone()
+                                    };
+                                    let sub_txt = format!("ID {} • {}", raw_id, st_part);
+                                    let trunc_sub = truncate_text_to_width(ui.painter(), &sub_txt, FontId::monospace(10.0), (right_limit - text_left).max(50.0));
+                                    ui.painter().text(Pos2::new(text_left, content_r.top() + 18.0), egui::Align2::LEFT_TOP, trunc_sub, FontId::monospace(10.0), pal.on_surface_muted);
+
+                                    if row_resp.clicked() {
+                                        let id = dev.device_id.clone();
+                                        let mut g = core.lock().unwrap();
+                                        g.device_dropdown_open = false;
+                                        let ipc = g.ipc.clone();
+                                        g.rt.spawn(async move {
+                                            ipc.select_saved_profile(&id).await;
+                                            let _ = ipc.send_command(IpcCommand::SelectTrustedDevice { device_id: id }).await;
+                                        });
                                     }
 
-                                    // 4. Botón editar 28x28 con borde outline
-                                    let (ed_r, ed_resp) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
+                                    if show_check {
+                                        paint_glyph(
+                                            ui.painter(),
+                                            Pos2::new(chk_center_x, content_r.center().y),
+                                            glyph::CHECK,
+                                            16.0,
+                                            if is_active { pal.accent } else { pal.on_surface_muted },
+                                        );
+                                    }
+                                }
+
+                                // 4. Botones Editar / Eliminar visibles SOLO cuando el mouse está sobre esta fila (o en edición)
+                                if pointer_over_row {
+                                    let ed_resp = ui.interact(ed_r, Id::unique(("dd_edit", &dev.device_id)), Sense::click());
                                     ui.painter().rect(
                                         ed_r,
                                         CornerRadius::same(8),
@@ -1994,10 +2071,7 @@ fn render_device_dropdown_overlay(
                                         g.editing_device_name = dev.device_name.clone();
                                     }
 
-                                    ui.add_space(4.0);
-
-                                    // 5. Botón borrar 28x28 con borde outline (gris por defecto, rojo en hover!)
-                                    let (dl_r, dl_resp) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
+                                    let dl_resp = ui.interact(dl_r, Id::unique(("dd_del", &dev.device_id)), Sense::click());
                                     ui.painter().rect(
                                         dl_r,
                                         CornerRadius::same(8),
@@ -2021,11 +2095,15 @@ fn render_device_dropdown_overlay(
                                             let _ = ipc.send_command(IpcCommand::RevokeTrustedDevice { device_id: id }).await;
                                         });
                                     }
-                                });
-                            });
-                            ui.add_space(4.0);
-                        }
-                    });
+                                }
+
+                                // Avanzar cursor exactamente la altura de esta fila
+                                ui.allocate_exact_size(Vec2::new(inner_w, 48.0), Sense::hover());
+                                if idx < devices.len() - 1 {
+                                    ui.add_space(4.0);
+                                }
+                            }
+                        });
                 });
         });
 
@@ -2435,7 +2513,7 @@ fn render_opt_appearance(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal
 
             // 1. Tema con iconos (Sistema, Oscuro, Claro)
             ui.horizontal(|ui| {
-                ui.label(RichText::new(theme_lbl).size(13.5).color(pal.on_surface));
+                ui.label(RichText::new(theme_lbl).font(semibold(14.0)).color(pal.on_surface));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     egui::Frame::new()
                         .fill(pal.surface)
@@ -2452,18 +2530,17 @@ fn render_opt_appearance(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal
                                 for (mode_k, ic, lbl_k) in choices {
                                     let lbl = { core.lock().unwrap().t(lbl_k).to_string() };
                                     let active = theme_mode == mode_k;
-                                    let w = (ui.painter().layout_no_wrap(lbl.clone(), FontId::proportional(11.5), pal.on_surface).size().x + 32.0).max(66.0);
-                                    let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 24.0), Sense::click());
+                                    let lbl_gal = ui.painter().layout_no_wrap(lbl.clone(), FontId::proportional(11.0), pal.on_surface);
+                                    let w = (lbl_gal.size().x + 34.0).max(66.0);
+                                    let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
                                     if active {
                                         ui.painter().rect_filled(r, CornerRadius::same(6), pal.accent);
                                     }
                                     let fg = if active { pal.on_accent } else { pal.on_surface_muted };
-                                    paint_glyph(ui.painter(), Pos2::new(r.left() + 12.0, r.center().y), ic, 13.5, fg);
-                                    ui.painter().text(
-                                        Pos2::new(r.left() + 23.0, r.center().y),
-                                        egui::Align2::LEFT_CENTER,
-                                        lbl,
-                                        FontId::proportional(11.5),
+                                    paint_glyph(ui.painter(), Pos2::new(r.left() + 14.0, r.center().y), ic, 14.0, fg);
+                                    ui.painter().galley(
+                                        Pos2::new(r.left() + 24.0, r.center().y - lbl_gal.size().y * 0.5),
+                                        lbl_gal,
                                         fg,
                                     );
                                     if resp.clicked() {
@@ -2484,7 +2561,7 @@ fn render_opt_appearance(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal
             // 2. Custom Language Dropdown (System first, English, Español)
             let mut lang_btn_rect = Rect::NOTHING;
             ui.horizontal(|ui| {
-                ui.label(RichText::new(lang_lbl).size(13.5).color(pal.on_surface));
+                ui.label(RichText::new(lang_lbl).font(semibold(14.0)).color(pal.on_surface));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let cur_lbl = {
                         let g = core.lock().unwrap();
@@ -2495,7 +2572,7 @@ fn render_opt_appearance(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal
                         };
                         g.t(k).to_string()
                     };
-                    let (r, resp) = ui.allocate_exact_size(Vec2::new(150.0, 30.0), Sense::click());
+                    let (r, resp) = ui.allocate_exact_size(Vec2::new(150.0, 32.0), Sense::click());
                     lang_btn_rect = r;
                     ui.painter().rect(
                         r,
@@ -2504,14 +2581,13 @@ fn render_opt_appearance(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal
                         Stroke::new(1.0, if lang_open { pal.accent } else { pal.outline }),
                         StrokeKind::Inside,
                     );
-                    ui.painter().text(
-                        Pos2::new(r.left() + 12.0, r.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        cur_lbl,
-                        FontId::proportional(12.0),
+                    let cur_gal = ui.painter().layout_no_wrap(cur_lbl, FontId::proportional(12.0), pal.on_surface);
+                    ui.painter().galley(
+                        Pos2::new(r.left() + 12.0, r.center().y - cur_gal.size().y * 0.5),
+                        cur_gal,
                         pal.on_surface,
                     );
-                    paint_glyph(ui.painter(), Pos2::new(r.right() - 15.0, r.center().y), glyph::EXPAND_MORE, 16.0, pal.on_surface_muted);
+                    paint_chevron_y(ui.painter(), Pos2::new(r.right() - 15.0, r.center().y), lang_open, 15.0, pal.on_surface_muted);
                     if resp.clicked() {
                         let mut g = core.lock().unwrap();
                         g.language_dropdown_open = !g.language_dropdown_open;
@@ -2886,7 +2962,7 @@ fn render_opt_network(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
 
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
-                    ui.label(RichText::new(auto_title).size(13.5).color(pal.on_surface));
+                    ui.label(RichText::new(auto_title).font(semibold(14.0)).color(pal.on_surface));
                     ui.label(RichText::new(auto_desc).size(11.0).color(pal.on_surface_muted));
                 });
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -2908,20 +2984,20 @@ fn render_opt_network(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
             let mut port_has_focus = false;
             ui.horizontal(|ui| {
                 let total_w = ui.available_width();
-                let ip_w = ((total_w - 10.0) * 0.65).floor();
-                let port_w = total_w - 10.0 - ip_w;
+                let ip_w = ((total_w - 8.0) * (1.4 / 2.3)).floor();
+                let port_w = total_w - 8.0 - ip_w;
 
-                ui.allocate_ui_with_layout(Vec2::new(ip_w, 54.0), Layout::top_down(Align::Min), |ui| {
-                    ui.label(RichText::new(ip_lbl).size(11.5).color(pal.on_surface_muted));
+                ui.allocate_ui_with_layout(Vec2::new(ip_w, 52.0), Layout::top_down(Align::Min), |ui| {
+                    ui.label(RichText::new(ip_lbl).size(11.0).color(pal.on_surface_muted));
                     ui.add_space(4.0);
-                    let r = ui.add_sized([ip_w, 32.0], egui::TextEdit::singleline(&mut ip_buf).font(FontId::monospace(12.0)).hint_text(ip_ph));
+                    let r = styled_singleline_input(ui, pal, &mut ip_buf, ip_w, 32.0, &ip_ph);
                     ip_has_focus = r.has_focus();
                 });
-                ui.add_space(10.0);
-                ui.allocate_ui_with_layout(Vec2::new(port_w, 54.0), Layout::top_down(Align::Min), |ui| {
-                    ui.label(RichText::new(port_lbl).size(11.5).color(pal.on_surface_muted));
+                ui.add_space(8.0);
+                ui.allocate_ui_with_layout(Vec2::new(port_w, 52.0), Layout::top_down(Align::Min), |ui| {
+                    ui.label(RichText::new(port_lbl).size(11.0).color(pal.on_surface_muted));
                     ui.add_space(4.0);
-                    let r = ui.add_sized([port_w, 32.0], egui::TextEdit::singleline(&mut port_buf).font(FontId::monospace(12.0)));
+                    let r = styled_singleline_input(ui, pal, &mut port_buf, port_w, 32.0, "45362");
                     port_has_focus = r.has_focus();
                     port_buf.retain(|c| c.is_ascii_digit());
                     if port_buf.len() > 5 {
@@ -2942,52 +3018,70 @@ fn render_opt_network(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
                 }
             }
 
-            if let Some((fb_txt, ok)) = fb_opt {
-                ui.add_space(6.0);
-                ui.label(RichText::new(fb_txt).size(11.5).color(if ok { pal.accent } else { pal.red_disconnect }));
-            }
-
             ui.add_space(10.0);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if small_accent_btn(ui, pal, &save_lbl, 118.0, 30.0) {
-                    let mut g = core.lock().unwrap();
-                    let parsed_port = port_buf.parse::<u16>().ok().filter(|&p| p >= 1024);
-                    if let Some(p) = parsed_port {
-                        let ip_opt = if ip_buf.trim().is_empty() { None } else { Some(ip_buf.trim().to_string()) };
-                        g.net_ip_buf = ip_opt.clone().unwrap_or_default();
-                        g.net_port_buf = p.to_string();
-                        g.net_dirty_until = Some(Instant::now() + Duration::from_millis(2000));
-                        g.net_feedback = Some((g.t("settings_net_saved").to_string(), true, Instant::now() + Duration::from_secs(4)));
-                        g.send_ipc(IpcCommand::SetTcpNetworkConfig { tcp_ip: ip_opt, tcp_port: Some(p), reset: false });
-                    } else {
-                        let msg = g.t("settings_net_invalid_port").to_string();
-                        g.net_feedback = Some((msg, false, Instant::now() + Duration::from_secs(4)));
+            let row_w = ui.available_width();
+            ui.allocate_ui_with_layout(Vec2::new(row_w, 32.0), Layout::left_to_right(Align::Center), |ui| {
+                if let Some((fb_txt, ok)) = fb_opt {
+                    ui.label(RichText::new(fb_txt).size(11.0).color(if ok { pal.accent } else { pal.red_disconnect }));
+                }
+                ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), 32.0), Layout::right_to_left(Align::Center), |ui| {
+                    if small_accent_btn(ui, pal, &save_lbl, 96.0, 32.0) {
+                        let mut g = core.lock().unwrap();
+                        let parsed_port = port_buf.parse::<u16>().ok().filter(|&p| p >= 1024);
+                        if let Some(p) = parsed_port {
+                            let ip_opt = if ip_buf.trim().is_empty() { None } else { Some(ip_buf.trim().to_string()) };
+                            g.net_ip_buf = ip_opt.clone().unwrap_or_default();
+                            g.net_port_buf = p.to_string();
+                            g.net_dirty_until = Some(Instant::now() + Duration::from_millis(2000));
+                            g.net_feedback = Some((g.t("settings_net_saved").to_string(), true, Instant::now() + Duration::from_secs(4)));
+                            g.send_ipc(IpcCommand::SetTcpNetworkConfig { tcp_ip: ip_opt, tcp_port: Some(p), reset: false });
+                        } else {
+                            let msg = g.t("settings_net_invalid_port").to_string();
+                            g.net_feedback = Some((msg, false, Instant::now() + Duration::from_secs(4)));
+                        }
                     }
-                }
-                ui.add_space(8.0);
-                if small_secondary_btn(ui, pal, &reset_lbl, 134.0, 30.0) {
-                    let mut g = core.lock().unwrap();
-                    g.net_ip_buf.clear();
-                    g.net_port_buf = "45362".to_string();
-                    g.net_dirty_until = Some(Instant::now() + Duration::from_millis(2000));
-                    g.net_feedback = Some((g.t("settings_net_reset_done").to_string(), true, Instant::now() + Duration::from_secs(4)));
-                    g.send_ipc(IpcCommand::SetTcpNetworkConfig { tcp_ip: None, tcp_port: None, reset: true });
-                }
+                    ui.add_space(8.0);
+                    let rst_gal = ui.painter().layout_no_wrap(reset_lbl.clone(), FontId::proportional(11.0), pal.on_surface_muted);
+                    let rst_w = (rst_gal.size().x + 24.0).max(120.0);
+                    let (rr, rresp) = ui.allocate_exact_size(Vec2::new(rst_w, 32.0), Sense::click());
+                    ui.painter().rect(
+                        rr,
+                        CornerRadius::same(8),
+                        pal.surface,
+                        Stroke::new(1.0, if rresp.hovered() { pal.accent } else { pal.outline }),
+                        StrokeKind::Inside,
+                    );
+                    ui.painter().galley(
+                        Pos2::new(rr.center().x - rst_gal.size().x * 0.5, rr.center().y - rst_gal.size().y * 0.5),
+                        rst_gal,
+                        if rresp.hovered() { pal.on_surface } else { pal.on_surface_muted },
+                    );
+                    if rresp.clicked() {
+                        let mut g = core.lock().unwrap();
+                        g.net_ip_buf.clear();
+                        g.net_port_buf = "45362".to_string();
+                        g.net_dirty_until = Some(Instant::now() + Duration::from_millis(2000));
+                        g.net_feedback = Some((g.t("settings_net_reset_done").to_string(), true, Instant::now() + Duration::from_secs(4)));
+                        g.send_ipc(IpcCommand::SetTcpNetworkConfig { tcp_ip: None, tcp_port: None, reset: true });
+                    }
+                });
             });
         });
 }
 
 fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &ThemePalette) {
-    let (hdr, check_lbl, checking, upd, sync_ver, auto_app, auto_drv, auto_on_lbl, auto_off_lbl, portable_lbl, drv_title, dl_lbl, inst_drv_lbl, dl_ing_lbl, restart_lbl, app_msg, drv_msg) = {
+    let (hdr, check_lbl, checking, spin_active, upd, sync_ver, auto_app, auto_drv, auto_on_lbl, auto_off_lbl, portable_lbl, dl_lbl, inst_drv_lbl, dl_ing_lbl, restart_lbl, app_msg, drv_msg) = {
         let g = core.lock().unwrap();
         let u = g.updates.clone();
         let is_chk = u.app_status == "checking" || u.driver_status == "checking";
+        let spin_on = is_chk || g.upd_spin_until.is_some_and(|t| Instant::now() < t);
         let app_m = translate_upd_msg(&g, true, &u);
         let drv_m = translate_upd_msg(&g, false, &u);
         (
             g.t("settings_updates_header").to_uppercase(),
             g.t(if is_chk { "settings_checking_updates" } else { "settings_check_updates" }).to_string(),
             is_chk,
+            spin_on,
             u,
             g.live.sync_version.clone(),
             g.live.ui_settings.auto_update_app,
@@ -2995,7 +3089,6 @@ fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
             g.t("settings_auto_prefix_on").to_string(),
             g.t("settings_auto_prefix_off").to_string(),
             g.t("settings_mode_portable").to_string(),
-            g.t("about_driver_label").to_string(),
             g.t("settings_btn_download_install").to_string(),
             g.t("settings_btn_install_driver").to_string(),
             g.t("settings_btn_downloading").to_string(),
@@ -3006,21 +3099,29 @@ fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
     };
 
     ui.horizontal(|ui| {
-        ui.label(RichText::new(hdr).size(11.5).color(pal.on_surface_muted));
+        ui.label(RichText::new(hdr).size(12.0).color(pal.on_surface_muted));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let w = 152.0;
-            let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 24.0), Sense::click());
-            let ang = if checking {
+            let gal = ui.painter().layout_no_wrap(check_lbl.clone(), FontId::proportional(11.0), pal.accent);
+            let w = gal.size().x + 20.0;
+            let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 22.0), Sense::click());
+            let ang = if spin_active {
                 ui.ctx().request_repaint();
-                (ui.input(|i| i.time) * 6.0) as f32
+                (ui.input(|i| i.time) * 6.5) as f32
             } else {
                 0.0
             };
-            let _ = ang;
-            paint_glyph(ui.painter(), Pos2::new(r.right() - w + 10.0, r.center().y), glyph::REFRESH, 14.0, pal.accent);
-            ui.painter().text(Pos2::new(r.right(), r.center().y), egui::Align2::RIGHT_CENTER, check_lbl, FontId::proportional(11.5), pal.accent);
+            let _ = checking;
+            paint_refresh_spin(ui.painter(), Pos2::new(r.left() + 7.0, r.center().y), 5.0, ang, pal.accent);
+            ui.painter().galley(Pos2::new(r.left() + 18.0, r.center().y - gal.size().y * 0.5), gal, pal.accent);
+            if resp.hovered() {
+                ui.painter().line_segment(
+                    [Pos2::new(r.left() + 18.0, r.center().y + 7.0), Pos2::new(r.right() - 2.0, r.center().y + 7.0)],
+                    Stroke::new(1.0, pal.accent),
+                );
+            }
             if resp.clicked() {
-                let g = core.lock().unwrap();
+                let mut g = core.lock().unwrap();
+                g.upd_spin_until = Some(Instant::now() + Duration::from_millis(650));
                 let u_bg = g.updater.clone();
                 let dv = g.live.snapshot.driver_version.clone();
                 let aa = g.live.ui_settings.auto_update_app;
@@ -3036,7 +3137,7 @@ fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
     egui::Frame::new()
         .fill(pal.surface_elevated)
         .stroke(Stroke::new(1.0, pal.outline))
-        .corner_radius(CornerRadius::same(10))
+        .corner_radius(CornerRadius::same(8))
         .inner_margin(Margin::same(12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
@@ -3044,13 +3145,13 @@ fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
             // Fila App (con cápsula versión + cápsula Portable condicional)
             ui.horizontal(|ui| {
                 let app_name = if upd.app_display_name.is_empty() { "NFC Bridge Sync" } else { &upd.app_display_name };
-                ui.label(RichText::new(app_name).size(13.5).strong().color(pal.on_surface));
+                ui.label(RichText::new(app_name).font(semibold(14.0)).color(pal.on_surface));
                 ui.add_space(6.0);
                 let v_str = format!("v{}", if upd.app_version.is_empty() { &sync_ver } else { &upd.app_version });
                 paint_inline_capsule(ui, &v_str, true, pal);
                 if upd.is_portable {
                     ui.add_space(4.0);
-                    paint_inline_capsule(ui, &portable_lbl, false, pal);
+                    paint_inline_capsule(ui, &portable_lbl, true, pal);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if switch_pill_btn(ui, pal, if auto_app { &auto_on_lbl } else { &auto_off_lbl }, auto_app) {
@@ -3061,7 +3162,7 @@ fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
                 });
             });
             ui.add_space(4.0);
-            ui.label(RichText::new(app_msg).size(11.5).color(if upd.app_status == "available" { pal.accent } else { pal.on_surface_muted }));
+            ui.label(RichText::new(app_msg).size(11.0).color(if upd.app_status == "available" { pal.accent } else { pal.on_surface_muted }));
 
             if upd.app_status == "available" || upd.app_status == "downloading" || upd.app_status == "installed_restart" || upd.pending_restart {
                 ui.add_space(6.0);
@@ -3092,9 +3193,9 @@ fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
 
             // Fila Driver
             ui.horizontal(|ui| {
-                ui.label(RichText::new(drv_title).size(13.5).strong().color(pal.on_surface));
+                ui.label(RichText::new("NFC Bridge Driver").font(semibold(14.0)).color(pal.on_surface));
                 ui.add_space(6.0);
-                let dv_str = upd.driver_version.as_deref().map(|v| format!("v{}", v)).unwrap_or_else(|| "v?".to_string());
+                let dv_str = upd.driver_version.as_deref().map(|v| format!("v{}", v)).unwrap_or_else(|| "--".to_string());
                 paint_inline_capsule(ui, &dv_str, true, pal);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if switch_pill_btn(ui, pal, if auto_drv { &auto_on_lbl } else { &auto_off_lbl }, auto_drv) {
@@ -3105,7 +3206,7 @@ fn render_opt_updates(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &
                 });
             });
             ui.add_space(4.0);
-            ui.label(RichText::new(drv_msg).size(11.5).color(if upd.driver_status == "available" { pal.accent } else { pal.on_surface_muted }));
+            ui.label(RichText::new(drv_msg).size(11.0).color(if upd.driver_status == "available" { pal.accent } else { pal.on_surface_muted }));
 
             if upd.driver_status == "available" || upd.driver_status == "downloading" {
                 ui.add_space(6.0);
@@ -3157,7 +3258,7 @@ fn translate_upd_msg(g: &SharedUiCore, is_app: bool, u: &UpdatesOverviewState) -
 }
 
 fn render_opt_about(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &ThemePalette) {
-    let (hdr, app_name, app_ver, mode_lbl, mode_val, drv_lbl, drv_ver_lbl, drv_state_lbl, drv_state_val, proto_lbl, proto_val) = {
+    let (hdr, app_name, app_ver, mode_lbl, mode_val, drv_ver_lbl, drv_state_lbl, drv_state_val, drv_online, proto_lbl, proto_val) = {
         let g = core.lock().unwrap();
         let u = &g.updates;
         let name = if u.app_display_name.is_empty() { "NFC Bridge Sync".to_string() } else { u.app_display_name.clone() };
@@ -3174,10 +3275,10 @@ fn render_opt_about(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &Th
             ver,
             g.t("about_exec_mode_label").to_string(),
             g.t(if u.is_portable { "about_exec_portable" } else { "about_exec_installed" }).to_string(),
-            g.t("about_driver_label").to_string(),
             dver,
             g.t("about_driver_state_label").to_string(),
             dst,
+            g.live.driver_online,
             g.t("about_protocol_label").to_string(),
             g.t("about_protocol_val").to_string(),
         )
@@ -3193,17 +3294,30 @@ fn render_opt_about(core: &Arc<Mutex<SharedUiCore>>, ui: &mut egui::Ui, pal: &Th
         .inner_margin(Margin::same(12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            about_row(ui, pal, &app_name, &app_ver, true);
-            ui.add_space(8.0);
-            about_row(ui, pal, &mode_lbl, &mode_val, false);
+            // Orden exacto HTML Image 11:
+            // 1. NFC Bridge Sync
+            about_row(ui, pal, &app_name, &app_ver, true, pal.on_surface);
             ui.add_space(10.0);
             paint_divider(ui, pal);
             ui.add_space(10.0);
-            about_row(ui, pal, &drv_lbl, &drv_ver_lbl, true);
+            // 2. NFC Bridge Driver
+            about_row(ui, pal, "NFC Bridge Driver", &drv_ver_lbl, true, pal.on_surface);
+            ui.add_space(10.0);
+            paint_divider(ui, pal);
+            ui.add_space(10.0);
+            // 3-5. Execution mode, Driver state (verde!), Protocol
+            about_row(ui, pal, &mode_lbl, &mode_val, false, pal.on_surface_muted);
             ui.add_space(8.0);
-            about_row(ui, pal, &drv_state_lbl, &drv_state_val, false);
+            about_row(
+                ui,
+                pal,
+                &drv_state_lbl,
+                &drv_state_val,
+                false,
+                if drv_online { pal.led_green } else { pal.red_disconnect },
+            );
             ui.add_space(8.0);
-            about_row(ui, pal, &proto_lbl, &proto_val, false);
+            about_row(ui, pal, &proto_lbl, &proto_val, false, pal.on_surface_muted);
         });
 }
 
@@ -3576,39 +3690,111 @@ fn small_danger_btn(ui: &mut egui::Ui, pal: &ThemePalette, label: &str, w: f32, 
     resp.clicked()
 }
 
+fn styled_singleline_input(
+    ui: &mut egui::Ui,
+    pal: &ThemePalette,
+    buf: &mut String,
+    w: f32,
+    h: f32,
+    hint: &str,
+) -> egui::Response {
+    let (box_r, _) = ui.allocate_exact_size(Vec2::new(w, h), Sense::hover());
+    let mut inner_resp: Option<egui::Response> = None;
+    let text_rect = box_r.shrink2(Vec2::new(10.0, 2.0));
+    ui.painter().rect(
+        box_r,
+        CornerRadius::same(8),
+        pal.surface,
+        Stroke::new(1.0, pal.outline),
+        StrokeKind::Inside,
+    );
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(text_rect)
+            .layout(Layout::left_to_right(Align::Center)),
+        |ui| {
+            let te = ui.add_sized(
+                Vec2::new(text_rect.width(), 20.0),
+                egui::TextEdit::singleline(buf)
+                    .frame(egui::Frame::NONE)
+                    .font(FontId::monospace(12.0))
+                    .hint_text(hint)
+                    .clip_text(true),
+            );
+            if te.has_focus() {
+                ui.painter().rect_stroke(
+                    box_r,
+                    CornerRadius::same(8),
+                    Stroke::new(1.0, pal.accent),
+                    StrokeKind::Inside,
+                );
+            }
+            inner_resp = Some(te);
+        },
+    );
+    inner_resp.unwrap()
+}
+
+fn truncate_text_to_width(painter: &egui::Painter, text: &str, font: FontId, max_w: f32) -> String {
+    if painter.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE).size().x <= max_w {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let mut lo = 0usize;
+    let mut hi = chars.len();
+    while lo < hi {
+        let mid = (lo + hi + 1) / 2;
+        let cand: String = chars[..mid].iter().collect::<String>() + "...";
+        if painter.layout_no_wrap(cand, font.clone(), Color32::WHITE).size().x <= max_w {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    if lo == 0 {
+        "...".to_string()
+    } else {
+        chars[..lo].iter().collect::<String>() + "..."
+    }
+}
+
 fn switch_pill_btn(ui: &mut egui::Ui, pal: &ThemePalette, label: &str, on: bool) -> bool {
-    let gal = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(11.0), if on { pal.accent_on_soft } else { pal.on_surface_muted });
+    let fg = if on { pal.accent_on_soft } else { pal.on_surface_muted };
+    let gal = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(11.0), fg);
     let w = (gal.size().x + 20.0).max(74.0);
-    let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 26.0), Sense::click());
+    let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
     ui.painter().rect(
         r,
-        CornerRadius::same(7),
+        CornerRadius::same(8),
         if on { pal.accent_soft } else { pal.surface },
         Stroke::new(1.0, if on { pal.accent_border } else { pal.outline }),
         StrokeKind::Inside,
     );
-    ui.painter().galley(Pos2::new(r.center().x - gal.size().x * 0.5, r.center().y - gal.size().y * 0.5), gal, if on { pal.accent_on_soft } else { pal.on_surface_muted });
+    ui.painter().galley(Pos2::new(r.center().x - gal.size().x * 0.5, r.center().y - gal.size().y * 0.5), gal, fg);
     resp.clicked()
 }
 
 fn paint_color_hex_chip(ui: &mut egui::Ui, pal: &ThemePalette, dot_col: Color32, hex: &str) {
-    let gal = ui.painter().layout_no_wrap(hex.to_string(), FontId::monospace(10.5), pal.on_surface_muted);
+    let gal = ui.painter().layout_no_wrap(hex.to_string(), FontId::monospace(10.0), pal.on_surface_muted);
     let (r, _) = ui.allocate_exact_size(Vec2::new(gal.size().x + 26.0, 22.0), Sense::hover());
     ui.painter().rect(r, CornerRadius::same(11), pal.surface, Stroke::new(1.0, pal.outline), StrokeKind::Inside);
     ui.painter().circle_filled(Pos2::new(r.left() + 11.0, r.center().y), 4.5, dot_col);
     ui.painter().galley(Pos2::new(r.left() + 20.0, r.center().y - gal.size().y * 0.5), gal, pal.on_surface_muted);
 }
 
-fn about_row(ui: &mut egui::Ui, pal: &ThemePalette, left: &str, right: &str, left_strong: bool) {
+fn about_row(ui: &mut egui::Ui, pal: &ThemePalette, left: &str, right: &str, left_strong: bool, right_col: Color32) {
     ui.horizontal(|ui| {
-        let mut lt = RichText::new(left).size(12.5).color(if left_strong { pal.on_surface } else { pal.on_surface_muted });
         if left_strong {
-            lt = lt.strong();
+            ui.label(RichText::new(left).font(semibold(14.0)).color(pal.on_surface));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.label(RichText::new(right).monospace().size(12.0).color(right_col));
+            });
+        } else {
+            ui.label(RichText::new(left).size(11.0).color(pal.on_surface_muted));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.label(RichText::new(right).monospace().size(11.0).color(right_col));
+            });
         }
-        ui.label(lt);
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.label(RichText::new(right).monospace().size(11.0).color(pal.on_surface_muted));
-        });
     });
 }
 

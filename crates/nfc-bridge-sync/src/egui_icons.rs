@@ -180,6 +180,26 @@ pub fn paint_chevron_y(painter: &egui::Painter, center: Pos2, up: bool, size: f3
     );
 }
 
+/// Dibuja un icono circular de refresh capaz de rotar suavemente `angle` radianes.
+pub fn paint_refresh_spin(painter: &egui::Painter, center: Pos2, radius: f32, angle: f32, color: Color32) {
+    let segs = 18usize;
+    let sweep = std::f32::consts::PI * 1.48;
+    let mut pts = Vec::with_capacity(segs + 1);
+    for i in 0..=segs {
+        let a = angle - std::f32::consts::FRAC_PI_4 + sweep * (i as f32 / segs as f32);
+        pts.push(Pos2::new(center.x + a.cos() * radius, center.y + a.sin() * radius));
+    }
+    painter.add(egui::Shape::line(pts, Stroke::new(1.5, color)));
+    // Punta de flecha al final del arco
+    let tip_a = angle - std::f32::consts::FRAC_PI_4 + sweep;
+    let tip = Pos2::new(center.x + tip_a.cos() * radius, center.y + tip_a.sin() * radius);
+    let back1_a = tip_a - 0.55;
+    let back2_a = tip_a + 0.35;
+    let p1 = Pos2::new(center.x + back1_a.cos() * (radius * 0.55), center.y + back1_a.sin() * (radius * 0.55));
+    let p2 = Pos2::new(center.x + back2_a.cos() * (radius * 1.25), center.y + back2_a.sin() * (radius * 1.25));
+    painter.add(egui::Shape::convex_polygon(vec![tip, p1, p2], color, Stroke::NONE));
+}
+
 /// Pinta el icono oficial de Android (proporciones 24x24 exactas del SVG de Stitch) o Apple/iOS.
 pub fn paint_device_os_icon(
     painter: &egui::Painter,
