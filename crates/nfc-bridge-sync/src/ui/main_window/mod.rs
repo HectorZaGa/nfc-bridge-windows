@@ -8,8 +8,7 @@ use super::state::SharedUiCore;
 use super::widgets::{paint_chrome_btn, paint_pill};
 use device_dropdown::render_device_dropdown_overlay;
 use egui::{
-    Align, CornerRadius, Id, Layout, Margin, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2,
-    ViewportCommand,
+    Align, CornerRadius, Id, Layout, Margin, Pos2, Rect, Sense, Stroke, Vec2, ViewportCommand,
 };
 use left_column::render_left_column;
 use modals::render_body_modals;
@@ -87,26 +86,16 @@ pub(crate) fn render_main_viewport(
                 )
             };
 
-            let logo_rect = Rect::from_min_size(
-                Pos2::new(titlebar_rect.left() + 16.0, titlebar_rect.center().y - 14.0),
-                Vec2::splat(28.0),
-            );
-            ui.painter().rect(
-                logo_rect,
-                CornerRadius::same(8),
-                pal.accent_soft,
-                Stroke::new(1.0, pal.accent_border),
-                StrokeKind::Inside,
-            );
+            let logo_center = Pos2::new(titlebar_rect.left() + 26.0, titlebar_rect.center().y);
             paint_glyph(
                 ui.painter(),
-                logo_rect.center(),
-                glyph::CONTACTLESS,
-                16.0,
+                logo_center,
+                glyph::NFC,
+                22.0,
                 pal.accent,
             );
 
-            let mut x_cur = logo_rect.right() + 8.0;
+            let mut x_cur = titlebar_rect.left() + 44.0;
             let title_galley =
                 ui.painter()
                     .layout_no_wrap(app_title_text, semibold(16.0), pal.on_surface);

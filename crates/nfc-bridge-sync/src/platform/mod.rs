@@ -3,8 +3,11 @@ mod win32;
 
 #[cfg(windows)]
 pub use win32::{
-    apply_win32_dwm_to_title, detect_windows_dark_mode, detect_windows_spanish_locale,
-    launch_elevated_or_normal, read_windows_accent_hex, replace_previous_sync_processes,
+    apply_win32_dwm_to_title, configure_tray_popup_win32, current_tray_input_mask_win32,
+    detect_windows_dark_mode, detect_windows_spanish_locale, hide_tray_popup_win32,
+    is_cursor_in_window_win32, launch_elevated_or_normal, poll_tray_input_edges_win32,
+    read_windows_accent_hex, replace_previous_sync_processes, restore_main_window_win32,
+    show_tray_popup_at_win32,
 };
 
 /// Crea un `Command` ocultando ventanas de consola auxiliares en Windows (`CREATE_NO_WINDOW`).

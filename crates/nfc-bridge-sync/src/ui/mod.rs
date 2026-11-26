@@ -19,6 +19,11 @@ mod widgets;
 
 use crate::i18n::I18nCatalog;
 use crate::ipc::{DriverIpcClient, IpcCommand};
+#[cfg(windows)]
+use crate::platform::{
+    configure_tray_popup_win32, current_tray_input_mask_win32, hide_tray_popup_win32,
+    restore_main_window_win32, show_tray_popup_at_win32,
+};
 use crate::updater::DesktopUpdater;
 use eframe::egui;
 use egui::{Pos2, ViewportBuilder, ViewportCommand, ViewportId};
@@ -89,11 +94,11 @@ pub fn run_desktop_ui(
         options_painted: false,
         options_target_pos: None,
         tray_open: false,
-        tray_want_focus: false,
-        tray_saw_focus: false,
+        tray_input_mask: 0,
         tray_opened_at: None,
         tray_closed_at: None,
         tray_pos: None,
+        tray_anchor_px: None,
         tray_devices_expanded: false,
         tray_measured_height: None,
         should_quit: false,
@@ -151,6 +156,7 @@ pub fn run_desktop_ui(
     let tray_events: Arc<Mutex<Vec<TrayIconEvent>>> = Arc::new(Mutex::new(Vec::new()));
 
     let title_owned = app_title.to_string();
+    let title_for_ev = title_owned.clone();
     eframe::run_native(
         &title_owned,
         native_options,
@@ -162,12 +168,87 @@ pub fn run_desktop_ui(
             }
 
             let ctx_tray = cc.egui_ctx.clone();
-            let q_tray = tray_events.clone();
+            let core_tray_ev = core.clone();
+            let main_t_ev = title_for_ev.clone();
+            let tray_t_ev = format!("{} - Tray", title_for_ev);
             TrayIconEvent::set_event_handler(Some(move |ev| {
-                if let Ok(mut q) = q_tray.lock() {
-                    q.push(ev);
+                if let TrayIconEvent::Click {
+                    button,
+                    button_state: MouseButtonState::Up,
+                    position,
+                    ..
+                } = ev
+                {
+                    match button {
+                        MouseButton::Left => {
+                            {
+                                let mut g = core_tray_ev.lock().unwrap();
+                                g.tray_open = false;
+                                g.tray_closed_at = Some(Instant::now());
+                                g.main_visible = true;
+                                g.main_want_focus = true;
+                            }
+                            #[cfg(windows)]
+                            {
+                                hide_tray_popup_win32(&tray_t_ev);
+                                restore_main_window_win32(&main_t_ev);
+                            }
+                            ctx_tray.request_repaint_of(ViewportId::ROOT);
+                        }
+                        MouseButton::Right => {
+                            let ppp = ctx_tray.pixels_per_point().max(1.0);
+                            let mut opened = false;
+                            let mut closed = false;
+                            {
+                                let mut g = core_tray_ev.lock().unwrap();
+                                if g.tray_open {
+                                    g.tray_open = false;
+                                    g.tray_closed_at = Some(Instant::now());
+                                    closed = true;
+                                } else if g
+                                    .tray_closed_at
+                                    .is_none_or(|t| t.elapsed() > Duration::from_millis(160))
+                                {
+                                    let est_h = estimate_tray_height(&g);
+                                    let ax = position.x.round() as i32;
+                                    let ay = position.y.round() as i32;
+                                    #[cfg(windows)]
+                                    let clamped = show_tray_popup_at_win32(
+                                        &tray_t_ev, ax, ay, 296.0, est_h, ppp,
+                                    );
+                                    #[cfg(not(windows))]
+                                    let clamped: Option<(f32, f32)> = None;
+                                    g.tray_anchor_px = Some((ax, ay));
+                                    g.tray_pos = Some(match clamped {
+                                        Some((lx, ly)) => Pos2::new(lx, ly),
+                                        None => Pos2::new(
+                                            (position.x as f32 / ppp - 278.0).max(12.0),
+                                            (position.y as f32 / ppp - est_h - 14.0).max(12.0),
+                                        ),
+                                    });
+                                    g.tray_open = true;
+                                    #[cfg(windows)]
+                                    {
+                                        g.tray_input_mask = current_tray_input_mask_win32();
+                                    }
+                                    g.tray_opened_at = Some(Instant::now());
+                                    opened = true;
+                                }
+                            }
+                            if closed {
+                                #[cfg(windows)]
+                                hide_tray_popup_win32(&tray_t_ev);
+                                ctx_tray.request_repaint_of(ViewportId::ROOT);
+                            } else if opened {
+                                ctx_tray.request_repaint_of(ViewportId::from_hash_of(
+                                    "nb_tray_popup_viewport",
+                                ));
+                                ctx_tray.request_repaint_of(ViewportId::ROOT);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
-                ctx_tray.request_repaint();
             }));
 
             spawn_state_sync_loop(
@@ -308,51 +389,7 @@ impl eframe::App for NfcBridgeEguiApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let pending_tray: Vec<TrayIconEvent> = self
-            .tray_events
-            .lock()
-            .map(|mut q| std::mem::take(&mut *q))
-            .unwrap_or_default();
-
-        for evt in pending_tray {
-            if let TrayIconEvent::Click {
-                button,
-                button_state: MouseButtonState::Up,
-                position,
-                ..
-            } = evt
-            {
-                let mut g = self.core.lock().unwrap();
-                match button {
-                    MouseButton::Left => {
-                        g.tray_open = false;
-                        g.main_visible = true;
-                        g.main_want_focus = true;
-                    }
-                    MouseButton::Right => {
-                        if g.tray_open {
-                            g.tray_open = false;
-                            g.tray_closed_at = Some(Instant::now());
-                        } else if g
-                            .tray_closed_at
-                            .is_none_or(|t| t.elapsed() > Duration::from_millis(180))
-                        {
-                            let ppp = ctx.pixels_per_point().max(1.0);
-                            g.tray_pos = Some(Pos2::new(
-                                (position.x as f32) / ppp,
-                                (position.y as f32) / ppp,
-                            ));
-                            g.tray_open = true;
-                            g.tray_want_focus = true;
-                            g.tray_saw_focus = false;
-                            g.tray_opened_at = Some(Instant::now());
-                        }
-                    }
-                    _ => {}
-                }
-                ctx.request_repaint();
-            }
-        }
+        let _ = &self.tray_events;
 
         if ctx.input(|i| i.viewport().close_requested()) {
             let mut g = self.core.lock().unwrap();
@@ -374,7 +411,6 @@ impl eframe::App for NfcBridgeEguiApp {
             options_painted,
             mut options_target_pos,
             tray_open,
-            tray_want_focus,
             tray_pos,
             tray_h,
             should_quit,
@@ -407,9 +443,6 @@ impl eframe::App for NfcBridgeEguiApp {
             let owf = g.options_want_focus;
             g.options_want_focus = false;
 
-            let twf = g.tray_want_focus;
-            g.tray_want_focus = false;
-
             let th = estimate_tray_height(&g);
             (
                 wf,
@@ -422,7 +455,6 @@ impl eframe::App for NfcBridgeEguiApp {
                 g.options_painted,
                 g.options_target_pos,
                 g.tray_open,
-                twf,
                 g.tray_pos,
                 th,
                 g.should_quit,
@@ -442,6 +474,8 @@ impl eframe::App for NfcBridgeEguiApp {
         }
 
         if want_focus_main {
+            #[cfg(windows)]
+            restore_main_window_win32(&main_title);
             ctx.send_viewport_cmd(ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
             ctx.send_viewport_cmd(ViewportCommand::Focus);
@@ -518,33 +552,34 @@ impl eframe::App for NfcBridgeEguiApp {
             }
         }
 
-        if tray_open {
-            let tray_id = ViewportId::from_hash_of("nb_tray_popup_viewport");
-            let tray_title = format!("{} - Tray", main_title);
-            let w = 296.0_f32;
-            let pos = if let Some(p) = tray_pos {
-                Pos2::new((p.x - w + 18.0).max(12.0), (p.y - tray_h - 14.0).max(12.0))
-            } else {
-                Pos2::new(900.0, 420.0)
-            };
-            let vb = ViewportBuilder::default()
-                .with_title(tray_title.clone())
-                .with_inner_size([w, tray_h])
-                .with_position(pos)
-                .with_decorations(false)
-                .with_resizable(false)
-                .with_transparent(false)
-                .with_always_on_top()
-                .with_taskbar(false);
-            let core_tray = self.core.clone();
-            ctx.show_viewport_deferred(tray_id, vb, move |ui, _class| {
-                render_tray_viewport(&core_tray, &tray_title, ui);
-            });
-            if tray_want_focus {
-                ctx.send_viewport_cmd_to(tray_id, ViewportCommand::Visible(true));
-                ctx.send_viewport_cmd_to(tray_id, ViewportCommand::Focus);
-            }
-        }
+        // Mantener el viewport del tray pre-creado en memoria para apertura instantánea (<5 ms)
+        // incluso con la ventana principal minimizada o cerrada en segundo plano.
+        let tray_id = ViewportId::from_hash_of("nb_tray_popup_viewport");
+        let tray_title = format!("{} - Tray", main_title);
+        let w = 296.0_f32;
+        let pos = if tray_open {
+            tray_pos.unwrap_or(Pos2::new(900.0, 420.0))
+        } else {
+            Pos2::new(-32000.0, -32000.0)
+        };
+        let vb = ViewportBuilder::default()
+            .with_title(tray_title.clone())
+            .with_inner_size([w, tray_h])
+            .with_position(pos)
+            .with_visible(tray_open)
+            .with_active(false)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_transparent(false)
+            .with_always_on_top()
+            .with_taskbar(false);
+        let core_tray = self.core.clone();
+        let tray_title_cb = tray_title.clone();
+        ctx.show_viewport_deferred(tray_id, vb, move |ui, _class| {
+            render_tray_viewport(&core_tray, &tray_title_cb, ui);
+        });
+        #[cfg(windows)]
+        configure_tray_popup_win32(&tray_title);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {

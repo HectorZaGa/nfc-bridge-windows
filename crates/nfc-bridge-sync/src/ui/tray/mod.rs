@@ -6,6 +6,11 @@ use super::state::SharedUiCore;
 use super::theme::{apply_win32_dwm_to_title, ThemePalette};
 use super::widgets::{paint_divider, paint_inline_capsule};
 use crate::ipc::IpcCommand;
+#[cfg(windows)]
+use crate::platform::{
+    configure_tray_popup_win32, hide_tray_popup_win32, is_cursor_in_window_win32,
+    poll_tray_input_edges_win32, restore_main_window_win32, show_tray_popup_at_win32,
+};
 use egui::{
     Align, Color32, CornerRadius, FontId, Layout, Margin, Pos2, Rect, RichText, Sense, Stroke,
     StrokeKind, Vec2,
@@ -34,37 +39,54 @@ pub(crate) fn render_tray_viewport(
     ui: &mut egui::Ui,
 ) {
     let ctx = ui.ctx().clone();
-    let focused = ctx.input(|i| i.viewport().focused);
     let esc_pressed = ctx.input(|i| i.key_pressed(egui::Key::Escape));
     let close_req = ctx.input(|i| i.viewport().close_requested());
-    let pointer_inside = ctx.input(|i| i.pointer.hover_pos().is_some());
     let mut closing_now = false;
-    let mut poll_unfocused = false;
     {
         let mut g = core.lock().unwrap();
-        if focused == Some(true) {
-            g.tray_saw_focus = true;
+        if !g.tray_open || g.should_quit {
+            g.tray_open = false;
+            drop(g);
+            #[cfg(windows)]
+            hide_tray_popup_win32(tray_title);
+            return;
         }
+        let pointer_in_rect = ctx.input(|i| i.pointer.hover_pos().is_some()) || {
+            #[cfg(windows)]
+            {
+                is_cursor_in_window_win32(tray_title)
+            }
+            #[cfg(not(windows))]
+            {
+                false
+            }
+        };
+        let (mouse_edge, esc_edge) = {
+            #[cfg(windows)]
+            {
+                poll_tray_input_edges_win32(&mut g.tray_input_mask)
+            }
+            #[cfg(not(windows))]
+            {
+                (false, false)
+            }
+        };
         let past_grace = g
             .tray_opened_at
-            .is_some_and(|t| t.elapsed() > Duration::from_millis(280));
-        let lost_focus = if g.tray_saw_focus {
-            focused == Some(false) && !pointer_inside
-        } else {
-            poll_unfocused = !pointer_inside;
-            !pointer_inside && past_grace && outside_mouse_clicked_win32()
-        };
-        if lost_focus || esc_pressed || close_req || g.should_quit {
+            .is_some_and(|t| t.elapsed() > Duration::from_millis(180));
+        if esc_pressed || esc_edge || close_req || (!pointer_in_rect && past_grace && mouse_edge) {
             g.tray_open = false;
             g.tray_closed_at = Some(std::time::Instant::now());
             closing_now = true;
         }
     }
     if closing_now {
+        #[cfg(windows)]
+        hide_tray_popup_win32(tray_title);
         ctx.request_repaint_of(egui::ViewportId::ROOT);
-    } else if poll_unfocused {
-        ctx.request_repaint_after(Duration::from_millis(90));
+        return;
     }
+    ctx.request_repaint_after(Duration::from_millis(25));
 
     let (
         pal,
@@ -94,6 +116,8 @@ pub(crate) fn render_tray_viewport(
         if g.last_dwm_tray_key != Some(dwm_key) {
             g.last_dwm_tray_key = Some(dwm_key);
             apply_win32_dwm_to_title(tray_title, &pal);
+            #[cfg(windows)]
+            configure_tray_popup_win32(tray_title);
         }
         let st = &g.live;
         let snap = &st.snapshot;
@@ -231,7 +255,13 @@ pub(crate) fn render_tray_viewport(
                 g.tray_closed_at = Some(std::time::Instant::now());
                 g.main_visible = true;
                 g.main_want_focus = true;
+                let mt = g.app_title.clone();
                 drop(g);
+                #[cfg(windows)]
+                {
+                    hide_tray_popup_win32(tray_title);
+                    restore_main_window_win32(&mt);
+                }
                 ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
 
@@ -254,8 +284,16 @@ pub(crate) fn render_tray_viewport(
             {
                 let mut g = core.lock().unwrap();
                 g.tray_devices_expanded = !g.tray_devices_expanded;
+                let next_h = estimate_tray_height(&g);
+                #[cfg(windows)]
+                if let Some((ax, ay)) = g.tray_anchor_px {
+                    let ppp = ctx.pixels_per_point().max(1.0);
+                    if let Some((lx, ly)) = show_tray_popup_at_win32(tray_title, ax, ay, 296.0, next_h, ppp) {
+                        g.tray_pos = Some(Pos2::new(lx, ly));
+                    }
+                }
                 drop(g);
-                ctx.request_repaint_of(egui::ViewportId::ROOT);
+                ctx.request_repaint();
             }
             if dev_expanded {
                 for dev in devices.iter().take(4) {
@@ -320,7 +358,13 @@ pub(crate) fn render_tray_viewport(
                 g.main_visible = true;
                 g.main_want_focus = true;
                 g.active_panel = "tcp".to_string();
+                let mt = g.app_title.clone();
                 drop(g);
+                #[cfg(windows)]
+                {
+                    hide_tray_popup_win32(tray_title);
+                    restore_main_window_win32(&mt);
+                }
                 trigger_qr_request(core, &ctx, "tcp");
                 ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
@@ -400,6 +444,8 @@ pub(crate) fn render_tray_viewport(
                 }
                 g.options_want_focus = true;
                 drop(g);
+                #[cfg(windows)]
+                hide_tray_popup_win32(tray_title);
                 ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
 
@@ -441,6 +487,8 @@ pub(crate) fn render_tray_viewport(
                 g.options_open = false;
                 g.should_quit = true;
                 drop(g);
+                #[cfg(windows)]
+                hide_tray_popup_win32(tray_title);
                 ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
                 ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
@@ -459,8 +507,15 @@ pub(crate) fn render_tray_viewport(
                     .is_none_or(|(e, c, h)| e != dev_expanded || c != dev_count || (h - measured_h).abs() > 1.0)
                 {
                     g.tray_measured_height = Some((dev_expanded, dev_count, measured_h));
+                    #[cfg(windows)]
+                    if let Some((ax, ay)) = g.tray_anchor_px {
+                        let ppp = ctx.pixels_per_point().max(1.0);
+                        if let Some((lx, ly)) = show_tray_popup_at_win32(tray_title, ax, ay, 296.0, measured_h, ppp) {
+                            g.tray_pos = Some(Pos2::new(lx, ly));
+                        }
+                    }
                     drop(g);
-                    ctx.request_repaint_of(egui::ViewportId::ROOT);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(296.0, measured_h)));
                 }
             }
         });
@@ -515,22 +570,4 @@ fn tray_menu_item(
         );
     }
     resp.clicked()
-}
-
-fn outside_mouse_clicked_win32() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-            GetAsyncKeyState, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON,
-        };
-        unsafe {
-            (GetAsyncKeyState(VK_LBUTTON as i32) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(VK_RBUTTON as i32) as u16 & 0x8000) != 0
-                || (GetAsyncKeyState(VK_MBUTTON as i32) as u16 & 0x8000) != 0
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        false
-    }
 }

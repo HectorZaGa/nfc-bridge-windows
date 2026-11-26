@@ -16,7 +16,9 @@ fn asset_matches_arch_preference(name_lower: &str, arch_token: &str) -> u8 {
         || (arch_token != "arm64" && name_lower.contains("arm64"));
     if name_lower.contains(arch_token) {
         3
-    } else if name_lower.contains("universal") {
+    } else if name_lower.contains("universal")
+        || (!mentions_other && name_lower.ends_with("-windows-setup.exe"))
+    {
         2
     } else if !mentions_other {
         1
@@ -208,7 +210,7 @@ mod tests {
         );
         assert_eq!(
             asset_matches_arch_preference(
-                "nfc-bridge-driver-0.2.0-windows-universal-setup.exe",
+                "nfc-bridge-driver-0.2.0-windows-setup.exe",
                 "x86"
             ),
             2
@@ -228,7 +230,7 @@ mod tests {
                     size: 100,
                 },
                 GhAsset {
-                    name: "nfc-bridge-driver-0.2.1-windows-universal-setup.exe".to_string(),
+                    name: "nfc-bridge-driver-0.2.1-windows-setup.exe".to_string(),
                     browser_download_url: "https://example.com/drv-uni.exe".to_string(),
                     size: 300,
                 },
@@ -244,7 +246,7 @@ mod tests {
         } else {
             assert_eq!(
                 picked.asset_name,
-                "nfc-bridge-driver-0.2.1-windows-universal-setup.exe"
+                "nfc-bridge-driver-0.2.1-windows-setup.exe"
             );
         }
     }
