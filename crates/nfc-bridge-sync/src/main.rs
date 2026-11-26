@@ -208,7 +208,7 @@ fn main() -> Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        nfc_bridge_sync::desktop_window::run_desktop_ui(
+        nfc_bridge_sync::egui_app::run_desktop_ui(
             "NFC Bridge Sync",
             ipc_for_ui,
             upd_for_ui,

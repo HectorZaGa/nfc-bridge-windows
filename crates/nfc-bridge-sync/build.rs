@@ -64,40 +64,4 @@ fn main() {
 
     println!("cargo:rustc-env=NFC_BRIDGE_GIT_SHA={}", git_sha);
     println!("cargo:rustc-env=NFC_BRIDGE_BUILD_ID={}", build_id);
-
-    copy_webview2_loader_for_gnu();
-}
-
-fn copy_webview2_loader_for_gnu() {
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
-        return;
-    }
-    let arch = match std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
-        Ok("x86_64") => "x64",
-        Ok("aarch64") => "arm64",
-        Ok("x86") => "x86",
-        _ => return,
-    };
-    let Ok(out_dir) = std::env::var("OUT_DIR").map(std::path::PathBuf::from) else {
-        return;
-    };
-    // OUT_DIR = target/<profile>/build/nfc-bridge-sync-<hash>/out
-    let Some(profile_dir) = out_dir.ancestors().nth(3) else {
-        return;
-    };
-    let build_dir = profile_dir.join("build");
-    let Ok(entries) = std::fs::read_dir(&build_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !name.starts_with("webview2-com-sys-") {
-            continue;
-        }
-        let candidate = entry.path().join("out").join(arch).join("WebView2Loader.dll");
-        if candidate.is_file() {
-            let _ = std::fs::copy(&candidate, profile_dir.join("WebView2Loader.dll"));
-            break;
-        }
-    }
 }

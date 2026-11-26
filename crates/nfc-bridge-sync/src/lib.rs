@@ -1,6 +1,15 @@
 pub mod config;
-pub mod desktop_window;
 pub mod driver_manager;
+#[cfg(target_os = "windows")]
+pub mod egui_app;
+#[cfg(target_os = "windows")]
+mod egui_i18n;
+#[cfg(target_os = "windows")]
+mod egui_icons;
+#[cfg(target_os = "windows")]
+mod egui_qr;
+#[cfg(target_os = "windows")]
+mod egui_theme;
 pub mod server;
 pub mod ui_http;
 pub mod updater;

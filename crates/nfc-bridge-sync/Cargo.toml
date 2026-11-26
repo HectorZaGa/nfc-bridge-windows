@@ -1,6 +1,6 @@
 [package]
 name = "nfc-bridge-sync"
-version = "0.1.30"
+version = "0.1.31"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -23,11 +23,12 @@ reqwest = { workspace = true }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 [target.'cfg(windows)'.dependencies]
-tao = "0.38"
-wry = "0.58"
+egui = "0.37"
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "system_fonts"] }
 tray-icon = "0.27"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_System_Diagnostics_ToolHelp",
