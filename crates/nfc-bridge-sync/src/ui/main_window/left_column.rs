@@ -153,18 +153,23 @@ pub(crate) fn render_left_column(
         .fill(pal.surface_card)
         .stroke(Stroke::new(1.0, pal.outline))
         .corner_radius(CornerRadius::same(16))
-        .inner_margin(Margin::same(12))
+        .inner_margin(Margin::same(6))
         .show(ui, |ui| {
             let full_w = ui.available_width();
+            let lbl_gal = ui.painter().layout_no_wrap(
+                pause_lbl.clone(),
+                FontId::proportional(12.0),
+                pal.on_surface,
+            );
+            let pause_btn_w = (lbl_gal.size().x + 38.0).clamp(74.0, 92.0);
+            let right_controls_w = 6.0 + pause_btn_w + 6.0 + 32.0 + 6.0;
+
             ui.horizontal(|ui| {
-                let left_btn_w = (full_w - 122.0).max(150.0);
-                let (sel_rect, _) = ui.allocate_exact_size(
-                    Vec2::new(left_btn_w, 42.0),
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let hover_w = (full_w - right_controls_w).max(150.0);
+                let (hover_rect, _) = ui.allocate_exact_size(
+                    Vec2::new(hover_w, 48.0),
                     Sense::hover(),
-                );
-                let hover_rect = egui::Rect::from_min_max(
-                    sel_rect.min - Vec2::new(6.0, 4.0),
-                    Pos2::new(sel_rect.right() + 3.0, sel_rect.bottom() + 4.0),
                 );
                 let sel_resp = ui.interact(
                     hover_rect,
@@ -181,10 +186,8 @@ pub(crate) fn render_left_column(
                         .rect_filled(hover_rect, CornerRadius::same(8), pal.surface_elevated);
                 }
 
-                let icon_box = Rect::from_min_size(
-                    Pos2::new(sel_rect.left() + 2.0, sel_rect.top() + 1.0),
-                    Vec2::splat(40.0),
-                );
+                let content_r = hover_rect.shrink2(Vec2::new(8.0, 4.0));
+                let icon_box = Rect::from_min_size(content_r.min, Vec2::splat(40.0));
                 let (ic_bg, ic_border, ic_fg) = if is_connected {
                     (pal.accent_soft, pal.accent_border, pal.accent)
                 } else {
@@ -224,11 +227,11 @@ pub(crate) fn render_left_column(
                 let name_gal = ui
                     .painter()
                     .layout_no_wrap(device_name, semibold(16.0), pal.on_surface);
-                let name_w = name_gal.size().x.min(left_btn_w - 114.0);
+                let name_w = name_gal.size().x.min(hover_w - 122.0);
                 ui.painter()
-                    .galley(Pos2::new(tx_x, sel_rect.top() + 1.0), name_gal, pal.on_surface);
+                    .galley(Pos2::new(tx_x, content_r.top() + 1.0), name_gal, pal.on_surface);
 
-                let line1_cy = sel_rect.top() + 11.0;
+                let line1_cy = content_r.top() + 11.0;
                 let mut badge_x = tx_x + name_w + 8.0;
                 ui.painter()
                     .circle_filled(Pos2::new(badge_x, line1_cy), 4.0, led_color);
@@ -265,7 +268,7 @@ pub(crate) fn render_left_column(
                 }
 
                 ui.painter().text(
-                    Pos2::new(tx_x, sel_rect.top() + 23.0),
+                    Pos2::new(tx_x, content_r.top() + 23.0),
                     egui::Align2::LEFT_TOP,
                     device_meta,
                     FontId::proportional(12.0),
@@ -279,12 +282,6 @@ pub(crate) fn render_left_column(
 
                 ui.add_space(6.0);
 
-                let lbl_gal = ui.painter().layout_no_wrap(
-                    pause_lbl.clone(),
-                    FontId::proportional(12.0),
-                    pal.on_surface,
-                );
-                let pause_btn_w = (lbl_gal.size().x + 38.0).clamp(74.0, 92.0);
                 let (p_rect, p_resp) = ui.allocate_exact_size(
                     Vec2::new(pause_btn_w, 32.0),
                     if is_connected {

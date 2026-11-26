@@ -309,15 +309,15 @@ pub(crate) fn render_options_viewport(
             g.last_dwm_opts_key = Some(dwm_key);
             g.last_dwm_main_key = Some(dwm_key);
             let main_title = g.app_title.clone();
-            Some((pal_after, main_title))
+            Some((pal_after, main_title, g.options_open, g.tray_open))
         } else {
             None
         }
     };
-    if let Some((pal_after, main_title)) = pal_change {
+    if let Some((pal_after, main_title, opt_open, tray_open)) = pal_change {
         apply_egui_visuals(&ctx, &pal_after);
         apply_win32_dwm_to_title(opt_title, &pal_after);
         apply_win32_dwm_to_title(&main_title, &pal_after);
-        super::repaint_all_viewports(&ctx);
+        super::repaint_open_viewports(&ctx, opt_open, tray_open);
     }
 }
