@@ -19,18 +19,20 @@ pub fn paint_qr_box(
 
     let width = code.width();
     let colors = code.to_colors();
-    let pad = 8.0_f32;
-    let inner = box_rect.shrink(pad);
-    let mod_size = inner.width() / (width as f32);
-    let dark = Color32::from_rgb(18, 18, 18);
+    // Zona tranquila ISO estándar de 4 módulos por lado + margen exterior para esquinas redondeadas
+    let quiet = 4usize;
+    let total_mods = (width + quiet * 2) as f32;
+    let inner = box_rect.shrink(4.0);
+    let mod_size = inner.width() / total_mods;
+    let dark = Color32::BLACK;
 
     for row in 0..width {
         for col in 0..width {
             if colors[row * width + col] == QrColor::Dark {
-                let x0 = inner.left() + (col as f32) * mod_size;
-                let y0 = inner.top() + (row as f32) * mod_size;
-                let x1 = inner.left() + ((col + 1) as f32) * mod_size;
-                let y1 = inner.top() + ((row + 1) as f32) * mod_size;
+                let x0 = inner.left() + ((col + quiet) as f32) * mod_size;
+                let y0 = inner.top() + ((row + quiet) as f32) * mod_size;
+                let x1 = inner.left() + ((col + quiet + 1) as f32) * mod_size;
+                let y1 = inner.top() + ((row + quiet + 1) as f32) * mod_size;
                 let r = Rect::from_min_max(Pos2::new(x0, y0), Pos2::new(x1 + 0.05, y1 + 0.05));
                 painter.rect_filled(r, CornerRadius::ZERO, dark);
             }
