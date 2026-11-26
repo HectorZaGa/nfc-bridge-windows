@@ -18,5 +18,6 @@ fn main() {
         orig_name: "nfc-bridge-tools.exe",
         app_ico_path: Some("../../assets/icons/tools/app.ico"),
         tray_ico_path: Some("../../assets/icons/tools/tray.ico"),
+        uninstall_ico_path: Some("../../assets/icons/tools/uninstall.ico"),
     });
 }

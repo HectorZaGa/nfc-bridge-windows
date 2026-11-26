@@ -10,6 +10,7 @@ pub struct Win32ResourceSpec<'a> {
     pub orig_name: &'a str,
     pub app_ico_path: Option<&'a str>,
     pub tray_ico_path: Option<&'a str>,
+    pub uninstall_ico_path: Option<&'a str>,
 }
 
 pub fn emit_build_env_and_resources(
@@ -27,6 +28,7 @@ pub fn emit_build_env_and_resources(
         orig_name,
         app_ico_path: None,
         tray_ico_path: None,
+        uninstall_ico_path: None,
     });
 }
 
@@ -133,6 +135,7 @@ fn emit_win32_exe_resources(spec: &Win32ResourceSpec<'_>) {
 
     let ico_path = out_dir.join("app.ico");
     let tray_ico_path = out_dir.join("tray.ico");
+    let uninst_ico_path = out_dir.join("uninstall_res.ico");
     let rc_path = out_dir.join("app.rc");
     let res_path = out_dir.join("app.res");
 
@@ -141,10 +144,24 @@ fn emit_win32_exe_resources(spec: &Win32ResourceSpec<'_>) {
     }
 
     let mut tray_rc_line = String::new();
+    let mut next_icon_id = 2u8;
     if let Some(tp) = spec.tray_ico_path {
         let tray_bytes = load_ico_or_fallback(Some(tp), app_bgra);
         if std::fs::write(&tray_ico_path, tray_bytes).is_ok() {
-            tray_rc_line = "2 ICON \"tray.ico\"\n".to_string();
+            tray_rc_line = format!("{} ICON \"tray.ico\"\n", next_icon_id);
+            next_icon_id += 1;
+        }
+    }
+    let mut uninst_rc_line = String::new();
+    if let Some(up) = spec.uninstall_ico_path {
+        let up_path = Path::new(up);
+        if up_path.exists() {
+            if let Ok(uninst_bytes) = std::fs::read(up_path) {
+                if uninst_bytes.len() >= 22 && std::fs::write(&uninst_ico_path, uninst_bytes).is_ok()
+                {
+                    uninst_rc_line = format!("{} ICON \"uninstall_res.ico\"\n", next_icon_id);
+                }
+            }
         }
     }
 
@@ -174,7 +191,7 @@ fn emit_win32_exe_resources(spec: &Win32ResourceSpec<'_>) {
 
     let rc_content = format!(
         r#"1 ICON "app.ico"
-{tray_rc_line}{manifest_rc_line}1 VERSIONINFO
+{tray_rc_line}{uninst_rc_line}{manifest_rc_line}1 VERSIONINFO
 FILEVERSION {v0},{v1},{v2},0
 PRODUCTVERSION {v0},{v1},{v2},0
 FILEFLAGSMASK 0x3fL

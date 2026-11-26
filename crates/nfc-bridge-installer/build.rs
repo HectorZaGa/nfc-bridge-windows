@@ -46,6 +46,7 @@ fn main() {
         orig_name: "nfc-bridge-installer.exe",
         app_ico_path: Some(setup_ico),
         tray_ico_path: Some(uninst_ico),
+        uninstall_ico_path: None,
     });
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR missing"));

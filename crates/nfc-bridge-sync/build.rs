@@ -20,5 +20,6 @@ fn main() {
         orig_name: "nfc-bridge-sync.exe",
         app_ico_path: Some("../../assets/icons/sync/app.ico"),
         tray_ico_path: Some("../../assets/icons/sync/tray.ico"),
+        uninstall_ico_path: Some("../../assets/icons/sync/uninstall.ico"),
     });
 }
