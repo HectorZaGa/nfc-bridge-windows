@@ -392,6 +392,81 @@ pub fn show_tray_popup_at_win32(
     Some((x_px as f32 / ppp, y_px as f32 / ppp))
 }
 
+/// Posiciona y muestra el submenú en cascada junto a la fila padre del tray (`SWP_NOACTIVATE`)
+/// a la derecha si hay espacio en el monitor o a la izquierda si está junto al borde derecho.
+#[allow(clippy::too_many_arguments)]
+pub fn show_tray_submenu_at_win32(
+    sub_title: &str,
+    parent_tray_title: &str,
+    row_top_logical: f32,
+    sub_w_logical: f32,
+    sub_h_logical: f32,
+    ppp: f32,
+    cloak_before_show: bool,
+) -> Option<(f32, f32)> {
+    let parent_hwnd = find_hwnd_by_title(parent_tray_title);
+    if parent_hwnd.is_null() {
+        return None;
+    }
+    let mut p_rect: RECT = unsafe { std::mem::zeroed() };
+    if unsafe { GetWindowRect(parent_hwnd, &mut p_rect) } == 0 {
+        return None;
+    }
+
+    let ppp = ppp.max(1.0);
+    let w_px = (sub_w_logical * ppp).round().max(120.0) as i32;
+    let h_px = (sub_h_logical * ppp).round().max(60.0) as i32;
+
+    let mut mi: MONITORINFO = unsafe { std::mem::zeroed() };
+    mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+    let pt = POINT {
+        x: (p_rect.left + p_rect.right) / 2,
+        y: (p_rect.top + p_rect.bottom) / 2,
+    };
+    let hmon = unsafe { MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST) };
+    let (wl, wt, wr, wb) = if !hmon.is_null() && unsafe { GetMonitorInfoW(hmon, &mut mi) } != 0 {
+        (
+            mi.rcWork.left,
+            mi.rcWork.top,
+            mi.rcWork.right,
+            mi.rcWork.bottom,
+        )
+    } else {
+        (0, 0, 1920, 1040)
+    };
+
+    let pad = (8.0 * ppp).round() as i32;
+    let gap = (4.0 * ppp).round() as i32;
+    let x_px = if p_rect.right + gap + w_px <= wr - pad {
+        p_rect.right + gap
+    } else {
+        (p_rect.left - gap - w_px).max(wl + pad)
+    };
+    let raw_y = p_rect.top + ((row_top_logical - 6.0) * ppp).round() as i32;
+    let y_px = raw_y.clamp(wt + pad, (wb - h_px - pad).max(wt + pad));
+
+    let sub_hwnd = find_hwnd_by_title(sub_title);
+    if !sub_hwnd.is_null() {
+        configure_tray_popup_win32(sub_title);
+        unsafe {
+            if cloak_before_show {
+                set_dwm_bool_attr(sub_hwnd, DWMWA_CLOAK as u32, true);
+            }
+            SetWindowPos(
+                sub_hwnd,
+                HWND_TOPMOST,
+                x_px,
+                y_px,
+                w_px,
+                h_px,
+                SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER,
+            );
+        }
+    }
+
+    Some((x_px as f32 / ppp, y_px as f32 / ppp))
+}
+
 pub fn hide_tray_popup_win32(title: &str) {
     let hwnd = find_hwnd_by_title(title);
     if !hwnd.is_null() {

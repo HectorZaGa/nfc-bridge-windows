@@ -35,7 +35,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use theme::{apply_egui_visuals, apply_win32_dwm_to_title, parse_hex_rgb, rgb_to_hex, rgb_to_hsv, ThemePalette};
 use tray::icon::{build_nfc_rgba_bytes, load_app_icon_data};
-use tray::{estimate_tray_height, render_tray_viewport};
+use tray::{
+    estimate_tray_height, estimate_tray_submenu_size, render_tray_sub_viewport,
+    render_tray_viewport,
+};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 pub fn run_desktop_ui(
@@ -100,8 +103,12 @@ pub fn run_desktop_ui(
         tray_closed_at: None,
         tray_pos: None,
         tray_anchor_px: None,
-        tray_devices_expanded: false,
-        tray_qr_expanded: false,
+        tray_submenu: None,
+        tray_sub_paint_stage: 0,
+        tray_sub_pos: None,
+        tray_sub_row_y: 0.0,
+        tray_sub_hover_miss_since: None,
+        tray_sub_switch_pending: None,
         tray_measured_height: None,
         should_quit: false,
         active_panel: "usb".to_string(),
@@ -140,6 +147,7 @@ pub fn run_desktop_ui(
         last_dwm_main_key: None,
         last_dwm_opts_key: None,
         last_dwm_tray_key: None,
+        last_dwm_tray_sub_key: None,
         last_visuals_pal: None,
     }));
 
@@ -173,6 +181,7 @@ pub fn run_desktop_ui(
             let core_tray_ev = core.clone();
             let main_t_ev = title_for_ev.clone();
             let tray_t_ev = format!("{} - Tray", title_for_ev);
+            let tray_sub_t_ev = format!("{} - TraySub", title_for_ev);
             TrayIconEvent::set_event_handler(Some(move |ev| {
                 if let TrayIconEvent::Click {
                     button,
@@ -186,12 +195,16 @@ pub fn run_desktop_ui(
                             {
                                 let mut g = core_tray_ev.lock().unwrap();
                                 g.tray_open = false;
+                                g.tray_paint_stage = 0;
+                                g.tray_submenu = None;
+                                g.tray_sub_paint_stage = 0;
                                 g.tray_closed_at = Some(Instant::now());
                                 g.main_visible = true;
                                 g.main_want_focus = true;
                             }
                             #[cfg(windows)]
                             {
+                                hide_tray_popup_win32(&tray_sub_t_ev);
                                 hide_tray_popup_win32(&tray_t_ev);
                                 restore_main_window_win32(&main_t_ev);
                             }
@@ -205,6 +218,9 @@ pub fn run_desktop_ui(
                                 let mut g = core_tray_ev.lock().unwrap();
                                 if g.tray_open {
                                     g.tray_open = false;
+                                    g.tray_paint_stage = 0;
+                                    g.tray_submenu = None;
+                                    g.tray_sub_paint_stage = 0;
                                     g.tray_closed_at = Some(Instant::now());
                                     closed = true;
                                 } else if g
@@ -230,8 +246,10 @@ pub fn run_desktop_ui(
                                     });
                                     g.tray_open = true;
                                     g.tray_paint_stage = 1;
-                                    g.tray_devices_expanded = false;
-                                    g.tray_qr_expanded = false;
+                                    g.tray_submenu = None;
+                                    g.tray_sub_paint_stage = 0;
+                                    g.tray_sub_hover_miss_since = None;
+                                    g.tray_sub_switch_pending = None;
                                     #[cfg(windows)]
                                     {
                                         g.tray_input_mask = current_tray_input_mask_win32();
@@ -242,9 +260,14 @@ pub fn run_desktop_ui(
                             }
                             if closed {
                                 #[cfg(windows)]
-                                hide_tray_popup_win32(&tray_t_ev);
+                                {
+                                    hide_tray_popup_win32(&tray_sub_t_ev);
+                                    hide_tray_popup_win32(&tray_t_ev);
+                                }
                                 ctx_tray.request_repaint_of(ViewportId::ROOT);
                             } else if opened {
+                                #[cfg(windows)]
+                                hide_tray_popup_win32(&tray_sub_t_ev);
                                 ctx_tray.request_repaint_of(ViewportId::from_hash_of(
                                     "nb_tray_popup_viewport",
                                 ));
@@ -371,6 +394,7 @@ pub(crate) fn repaint_open_viewports(ctx: &egui::Context, options_open: bool, tr
     }
     if tray_open {
         ctx.request_repaint_of(ViewportId::from_hash_of("nb_tray_popup_viewport"));
+        ctx.request_repaint_of(ViewportId::from_hash_of("nb_tray_sub_viewport"));
     }
 }
 
@@ -418,6 +442,9 @@ impl eframe::App for NfcBridgeEguiApp {
             tray_open,
             tray_pos,
             tray_h,
+            tray_sub_kind,
+            tray_sub_pos,
+            tray_sub_dims,
             should_quit,
             needs_dwm_main,
             needs_visuals,
@@ -426,6 +453,8 @@ impl eframe::App for NfcBridgeEguiApp {
             if g.should_quit {
                 g.tray_open = false;
                 g.tray_paint_stage = 0;
+                g.tray_submenu = None;
+                g.tray_sub_paint_stage = 0;
                 g.options_open = false;
                 g.options_paint_stage = 0;
             }
@@ -451,6 +480,10 @@ impl eframe::App for NfcBridgeEguiApp {
             g.options_want_focus = false;
 
             let th = estimate_tray_height(&g);
+            let sub_dims = g
+                .tray_submenu
+                .map(|k| estimate_tray_submenu_size(&g, k))
+                .unwrap_or((212.0, 140.0));
             (
                 wf,
                 g.main_visible,
@@ -464,6 +497,9 @@ impl eframe::App for NfcBridgeEguiApp {
                 g.tray_open,
                 g.tray_pos,
                 th,
+                g.tray_submenu,
+                g.tray_sub_pos,
+                sub_dims,
                 g.should_quit,
                 need_dwm,
                 need_vis,
@@ -501,7 +537,13 @@ impl eframe::App for NfcBridgeEguiApp {
             }
             if !tray_open {
                 g.last_dwm_tray_key = None;
+                g.last_dwm_tray_sub_key = None;
                 g.tray_paint_stage = 0;
+                g.tray_submenu = None;
+                g.tray_sub_paint_stage = 0;
+            } else if tray_sub_kind.is_none() {
+                g.last_dwm_tray_sub_key = None;
+                g.tray_sub_paint_stage = 0;
             }
         }
 
@@ -573,10 +615,11 @@ impl eframe::App for NfcBridgeEguiApp {
             ctx.request_repaint_of(opt_id);
         }
 
-        // Mantener el viewport del tray pre-creado en memoria para apertura instantánea (<5 ms)
-        // incluso con la ventana principal minimizada o cerrada en segundo plano.
+        // Mantener los viewports del tray (principal + submenú cascada) pre-creados en memoria.
         let tray_id = ViewportId::from_hash_of("nb_tray_popup_viewport");
         let tray_title = format!("{} - Tray", main_title);
+        let tray_sub_id = ViewportId::from_hash_of("nb_tray_sub_viewport");
+        let tray_sub_title = format!("{} - TraySub", main_title);
         let w = 296.0_f32;
         let pos = if tray_open {
             tray_pos.unwrap_or(Pos2::new(900.0, 420.0))
@@ -596,11 +639,39 @@ impl eframe::App for NfcBridgeEguiApp {
             .with_taskbar(false);
         let core_tray = self.core.clone();
         let tray_title_cb = tray_title.clone();
+        let tray_sub_title_cb = tray_sub_title.clone();
         ctx.show_viewport_deferred(tray_id, vb, move |ui, _class| {
-            render_tray_viewport(&core_tray, &tray_title_cb, ui);
+            render_tray_viewport(&core_tray, &tray_title_cb, &tray_sub_title_cb, ui);
+        });
+
+        let sub_visible = tray_open && tray_sub_kind.is_some();
+        let sub_pos = if sub_visible {
+            tray_sub_pos.unwrap_or(Pos2::new(660.0, 420.0))
+        } else {
+            Pos2::new(-32000.0, -32000.0)
+        };
+        let sub_vb = ViewportBuilder::default()
+            .with_title(tray_sub_title.clone())
+            .with_inner_size([tray_sub_dims.0, tray_sub_dims.1])
+            .with_position(sub_pos)
+            .with_visible(sub_visible)
+            .with_active(false)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_transparent(false)
+            .with_always_on_top()
+            .with_taskbar(false);
+        let core_sub = self.core.clone();
+        let tray_title_sub_cb = tray_title.clone();
+        let tray_sub_title_cb2 = tray_sub_title.clone();
+        ctx.show_viewport_deferred(tray_sub_id, sub_vb, move |ui, _class| {
+            render_tray_sub_viewport(&core_sub, &tray_title_sub_cb, &tray_sub_title_cb2, ui);
         });
         #[cfg(windows)]
-        configure_tray_popup_win32(&tray_title);
+        {
+            configure_tray_popup_win32(&tray_title);
+            configure_tray_popup_win32(&tray_sub_title);
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {

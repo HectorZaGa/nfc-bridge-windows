@@ -22,6 +22,12 @@ pub(crate) enum OptionsTab {
     About,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TraySubmenu {
+    Devices,
+    Qr,
+}
+
 pub(crate) struct SharedUiCore {
     pub(crate) ipc: DriverIpcClient,
     pub(crate) updater: DesktopUpdater,
@@ -47,9 +53,13 @@ pub(crate) struct SharedUiCore {
     pub(crate) tray_closed_at: Option<Instant>,
     pub(crate) tray_pos: Option<Pos2>,
     pub(crate) tray_anchor_px: Option<(i32, i32)>,
-    pub(crate) tray_devices_expanded: bool,
-    pub(crate) tray_qr_expanded: bool,
-    pub(crate) tray_measured_height: Option<(bool, bool, usize, bool, f32)>,
+    pub(crate) tray_submenu: Option<TraySubmenu>,
+    pub(crate) tray_sub_paint_stage: u8,
+    pub(crate) tray_sub_pos: Option<Pos2>,
+    pub(crate) tray_sub_row_y: f32,
+    pub(crate) tray_sub_hover_miss_since: Option<Instant>,
+    pub(crate) tray_sub_switch_pending: Option<(TraySubmenu, Instant)>,
+    pub(crate) tray_measured_height: Option<(bool, f32)>,
     pub(crate) should_quit: bool,
 
     // Estado visual de la ventana principal
@@ -100,6 +110,7 @@ pub(crate) struct SharedUiCore {
     pub(crate) last_dwm_main_key: Option<(bool, Color32)>,
     pub(crate) last_dwm_opts_key: Option<(bool, Color32)>,
     pub(crate) last_dwm_tray_key: Option<(bool, Color32)>,
+    pub(crate) last_dwm_tray_sub_key: Option<(bool, Color32)>,
     pub(crate) last_visuals_pal: Option<ThemePalette>,
 }
 
