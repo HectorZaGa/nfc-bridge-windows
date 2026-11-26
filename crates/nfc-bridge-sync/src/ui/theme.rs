@@ -1,7 +1,8 @@
 //! Sistema de diseño Material/Stitch y paleta dinámica Dark/Light + color de acento
 //! para la interfaz nativa `egui` de NFC Bridge.
 
-use crate::server::SyncUiSettings;
+use crate::ipc::SyncUiSettings;
+use crate::platform::{apply_win32_dwm_to_title as platform_apply_dwm, detect_windows_dark_mode};
 use egui::{Color32, CornerRadius, Stroke, Visuals};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -59,7 +60,6 @@ impl ThemePalette {
         } else {
             Color32::from_rgba_unmultiplied(r, g, b, 31)
         };
-        // bg-electric-blue-soft/35 sobre surface_card (#1E1E1E o #FFFFFF)
         let accent_card_bg = if is_dark {
             Color32::from_rgb(
                 (30.0 + (r as f32 - 30.0) * 0.065).round() as u8,
@@ -279,108 +279,12 @@ pub fn apply_egui_visuals(ctx: &egui::Context, pal: &ThemePalette) {
     });
 }
 
-fn detect_windows_dark_mode() -> bool {
-    #[cfg(windows)]
-    {
-        use std::sync::{Mutex, OnceLock};
-        use std::time::{Duration, Instant};
-
-        static CACHE: OnceLock<Mutex<Option<(Instant, bool)>>> = OnceLock::new();
-        let lock = CACHE.get_or_init(|| Mutex::new(None));
-        if let Ok(mut g) = lock.lock() {
-            let now = Instant::now();
-            if let Some((ts, cached)) = *g {
-                if now.duration_since(ts) < Duration::from_secs(2) {
-                    return cached;
-                }
-            }
-            let dark = read_windows_apps_dark_mode_reg();
-            *g = Some((now, dark));
-            return dark;
-        }
-        return read_windows_apps_dark_mode_reg();
-    }
-    #[cfg(not(windows))]
-    {
-        true
-    }
-}
-
-#[cfg(windows)]
-fn read_windows_apps_dark_mode_reg() -> bool {
-    use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
-
-    let subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0"
-        .encode_utf16()
-        .collect();
-    let value: Vec<u16> = "AppsUseLightTheme\0".encode_utf16().collect();
-    let mut data: u32 = 0;
-    let mut cb_data: u32 = std::mem::size_of::<u32>() as u32;
-    let status = unsafe {
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            subkey.as_ptr(),
-            value.as_ptr(),
-            RRF_RT_REG_DWORD,
-            std::ptr::null_mut(),
-            &mut data as *mut u32 as *mut core::ffi::c_void,
-            &mut cb_data,
-        )
-    };
-    if status == 0 {
-        return data == 0;
-    }
-    true
-}
-
-/// Aplica esquinas redondeadas DWM de Windows 11, borde nativo y pincel de fondo oscuro/claro
-/// al HWND del viewport activo para evitar bordes blancos en cualquier ventana frameless.
 #[cfg(windows)]
 pub fn apply_win32_dwm_to_title(title: &str, pal: &ThemePalette) {
-    use windows_sys::Win32::Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
-        DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
-    };
-    use windows_sys::Win32::Graphics::Gdi::CreateSolidBrush;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, SetClassLongPtrW, GCLP_HBRBACKGROUND};
-
-    let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
-    let hwnd = unsafe { FindWindowW(std::ptr::null(), wide.as_ptr()) };
-    if hwnd.is_null() {
-        return;
-    }
-    unsafe {
-        let corner_pref: u32 = DWMWCP_ROUND as u32;
-        let _ = DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
-            &corner_pref as *const _ as *const _,
-            std::mem::size_of::<u32>() as u32,
-        );
-        let b_r = pal.outline.r() as u32;
-        let b_g = pal.outline.g() as u32;
-        let b_b = pal.outline.b() as u32;
-        let border_color: u32 = (b_b << 16) | (b_g << 8) | b_r;
-        let _ = DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_BORDER_COLOR as u32,
-            &border_color as *const _ as *const _,
-            std::mem::size_of::<u32>() as u32,
-        );
-        let dark_flag: i32 = if pal.is_dark { 1 } else { 0 };
-        let _ = DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
-            &dark_flag as *const _ as *const _,
-            std::mem::size_of::<i32>() as u32,
-        );
-        let bg_r = pal.surface.r() as u32;
-        let bg_g = pal.surface.g() as u32;
-        let bg_b = pal.surface.b() as u32;
-        let bg_color: u32 = (bg_b << 16) | (bg_g << 8) | bg_r;
-        let brush = CreateSolidBrush(bg_color);
-        if !brush.is_null() {
-            SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, brush as isize);
-        }
-    }
+    platform_apply_dwm(
+        title,
+        (pal.surface.r(), pal.surface.g(), pal.surface.b()),
+        (pal.outline.r(), pal.outline.g(), pal.outline.b()),
+        pal.is_dark,
+    );
 }

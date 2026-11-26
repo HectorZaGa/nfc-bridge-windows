@@ -1,15 +1,7 @@
 //! # Configuración y Modo Portable Inmune a Renombrado
 //!
-//! Detecta automáticamente si la aplicación se está ejecutando en modo portable o instalado.
-//!
-//! ### Detección Infalible de Modo Portable:
-//! 1. **Bandera de compilación (Incrustada en código máquina):** Si el binario fue compilado
-//!    con `--features portable`, siempre será portable aunque el usuario le cambie el nombre
-//!    a cualquier cosa (`sync.exe`, `app.exe`, etc.).
-//! 2. **Marcador de carpeta (Portable Container):** Si existe `portable.dat`, `.portable` o
-//!    `nfc-bridge.json` en la misma carpeta que el ejecutable.
-//! 3. **Heurística de nombre de archivo:** Si el nombre del ejecutable contiene `-portable.exe`,
-//!    `portable` o termina en `p.exe`.
+//! Detecta automáticamente si la aplicación se ejecuta en modo portable o instalado
+//! y centraliza las rutas de datos y preferencias de interfaz.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -50,7 +42,6 @@ impl AppConfig {
         if config_file.exists() {
             if let Ok(content) = std::fs::read_to_string(&config_file) {
                 if let Ok(mut loaded) = serde_json::from_str::<AppConfig>(&content) {
-                    // Mantener el data_dir y flag portable resueltos para la instancia actual
                     loaded.is_portable = default.is_portable;
                     loaded.data_dir = default.data_dir;
                     return loaded;
@@ -75,14 +66,14 @@ impl AppConfig {
 
 /// Determina de forma infalible si el binario se ejecuta en modo portable.
 pub fn is_portable_execution() -> (bool, Option<PathBuf>) {
-    let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
-    // 1. Detección por feature incrustada en compilación (Inmune a cambio de nombre del archivo)
     if cfg!(feature = "portable") {
         return (true, exe_dir);
     }
 
-    // 2. Detección por marcadores locales en la carpeta del ejecutable
     if let Some(ref dir) = exe_dir {
         if dir.join("portable.dat").exists()
             || dir.join(".portable").exists()
@@ -92,7 +83,6 @@ pub fn is_portable_execution() -> (bool, Option<PathBuf>) {
         }
     }
 
-    // 3. Detección heurística por nombre de archivo (ej. *-portable.exe, sync-portable.exe)
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(name) = exe_path.file_name().and_then(|n| n.to_str()) {
             let lower = name.to_lowercase();
@@ -105,37 +95,69 @@ pub fn is_portable_execution() -> (bool, Option<PathBuf>) {
     (false, exe_dir)
 }
 
-/// Resuelve el directorio de datos (%APPDATA% o junto al .exe si es portable).
-fn resolve_data_directory() -> (bool, PathBuf) {
+pub fn installed_app_data_dir() -> PathBuf {
+    std::env::var("APPDATA")
+        .or_else(|_| std::env::var("LOCALAPPDATA"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("NFC Bridge")
+}
+
+/// Resuelve el directorio de datos (%APPDATA%\NFC Bridge o junto al .exe si es portable).
+pub fn resolve_data_directory() -> (bool, PathBuf) {
     let (is_portable, exe_dir) = is_portable_execution();
 
     if is_portable {
         if let Some(dir) = exe_dir {
-            // Asegurar creación del marcador portable.dat para persistencia
             let marker = dir.join("portable.dat");
             if !marker.exists() {
                 let _ = std::fs::write(&marker, "NFC Bridge Portable Marker\n");
             }
-            info!("Modo PORTABLE activo: los datos se guardarán junto al ejecutable en {:?}", dir);
+            info!(
+                "Modo PORTABLE activo: los datos se guardarán junto al ejecutable en {:?}",
+                dir
+            );
             return (true, dir);
         }
     }
 
-    // Modo estándar de instalación en Windows: %APPDATA%\NFC Bridge
-    let app_data = std::env::var("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
-    let standard_dir = app_data.join("NFC Bridge");
-    (false, standard_dir)
+    (false, installed_app_data_dir())
 }
 
-/// Recursos de interfaz de Stitch incrustados directamente dentro del binario compilado (.exe)
+/// Ruta activa para `sync_ui_settings.json` respetando modo portable e instalado.
+pub fn ui_settings_path() -> PathBuf {
+    let (is_portable, exe_dir) = is_portable_execution();
+    if is_portable {
+        if let Some(dir) = exe_dir {
+            let local_settings = dir.join("sync_ui_settings.json");
+            if !local_settings.exists() {
+                let legacy = installed_app_data_dir().join("sync_ui_settings.json");
+                if legacy.exists() {
+                    let _ = std::fs::copy(&legacy, &local_settings);
+                }
+            }
+            return local_settings;
+        }
+    }
+    installed_app_data_dir().join("sync_ui_settings.json")
+}
+
+/// Diccionarios de internacionalización incrustados (únicamente ~22 KB frente a los 262 KB del HTML legado).
+pub struct EmbeddedI18n;
+
+impl EmbeddedI18n {
+    pub const EN_JSON: &'static str = include_str!("../ui/i18n/en.json");
+    pub const ES_JSON: &'static str = include_str!("../ui/i18n/es.json");
+}
+
+#[cfg(feature = "headless-http")]
 pub struct EmbeddedUi;
 
+#[cfg(feature = "headless-http")]
 impl EmbeddedUi {
     pub const INDEX_HTML: &'static str = include_str!("../ui/index.html");
     pub const TRAY_HTML: &'static str = include_str!("../ui/tray.html");
     pub const CASES_HTML: &'static str = include_str!("../ui/cases.html");
-    pub const EN_I18N_JSON: &'static str = include_str!("../ui/i18n/en.json");
-    pub const ES_I18N_JSON: &'static str = include_str!("../ui/i18n/es.json");
+    pub const EN_I18N_JSON: &'static str = EmbeddedI18n::EN_JSON;
+    pub const ES_I18N_JSON: &'static str = EmbeddedI18n::ES_JSON;
 }

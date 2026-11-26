@@ -8,6 +8,7 @@ license.workspace = true
 [features]
 default = []
 portable = []
+headless-http = ["qrcode/svg"]
 
 [dependencies]
 core-proto = { workspace = true }
@@ -15,12 +16,11 @@ tokio = { workspace = true }
 bytes = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+qrcode = { version = "0.14", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 egui = "0.37"

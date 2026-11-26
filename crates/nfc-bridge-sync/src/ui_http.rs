@@ -10,7 +10,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tracing::{info, warn};
 
 use crate::config::EmbeddedUi;
-use crate::server::{DriverIpcClient, IpcCommand};
+use crate::ipc::{DriverIpcClient, IpcCommand, SyncUiSettings};
 use crate::updater::DesktopUpdater;
 
 pub const DEFAULT_UI_HTTP_PORT: u16 = 45363;
@@ -485,7 +485,7 @@ pub async fn dispatch_ui_request(
                     },
                     "save_ui_settings" => {
                         let cur = ipc.get_live_state().await.ui_settings;
-                        let updated = crate::server::SyncUiSettings {
+                        let updated = SyncUiSettings {
                             theme_mode: req.theme_mode.unwrap_or(cur.theme_mode),
                             use_windows_accent: req
                                 .use_windows_accent

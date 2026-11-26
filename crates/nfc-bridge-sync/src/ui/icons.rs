@@ -1,7 +1,7 @@
 //! Iconos vectoriales y fuente Material Symbols Outlined incrustada (13 KB offline)
 //! para la interfaz nativa `egui` de NFC Bridge Sync y Tools Desktop.
 
-use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Pos2, Rect, RichText, Stroke, Vec2};
+use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Pos2, Rect, RichText, Stroke};
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -59,7 +59,7 @@ pub mod glyph {
     pub const WIFI_TETHERING: char = '\u{e1e2}';
 }
 
-static MATERIAL_SYMBOLS_TTF: &[u8] = include_bytes!("../assets/material-symbols.ttf");
+static MATERIAL_SYMBOLS_TTF: &[u8] = include_bytes!("../../assets/material-symbols.ttf");
 
 pub fn icon_family() -> FontFamily {
     FontFamily::Name("icons".into())
@@ -152,7 +152,6 @@ fn load_windows_font(candidates: &[&str]) -> Option<Vec<u8>> {
     None
 }
 
-/// Dibuja un icono Material Symbol centrado exactamente dentro de `rect`.
 pub fn paint_glyph(painter: &egui::Painter, center: Pos2, ch: char, size: f32, color: Color32) {
     let mut s = String::with_capacity(4);
     s.push(ch);
@@ -165,42 +164,66 @@ pub fn paint_glyph(painter: &egui::Painter, center: Pos2, ch: char, size: f32, c
     );
 }
 
-/// Dibuja un chevron vertical (^ / v) limpio al estilo Material Symbols.
 pub fn paint_chevron_y(painter: &egui::Painter, center: Pos2, up: bool, size: f32, color: Color32) {
     let dx = size * 0.25;
     let dy = size * 0.14 * if up { -1.0 } else { 1.0 };
     let stroke = Stroke::new((size * 0.105).max(1.4), color);
     painter.line_segment(
-        [Pos2::new(center.x - dx, center.y - dy), Pos2::new(center.x, center.y + dy)],
+        [
+            Pos2::new(center.x - dx, center.y - dy),
+            Pos2::new(center.x, center.y + dy),
+        ],
         stroke,
     );
     painter.line_segment(
-        [Pos2::new(center.x, center.y + dy), Pos2::new(center.x + dx, center.y - dy)],
+        [
+            Pos2::new(center.x, center.y + dy),
+            Pos2::new(center.x + dx, center.y - dy),
+        ],
         stroke,
     );
 }
 
-/// Dibuja un icono circular de refresh capaz de rotar suavemente `angle` radianes.
-pub fn paint_refresh_spin(painter: &egui::Painter, center: Pos2, radius: f32, angle: f32, color: Color32) {
+pub fn paint_refresh_spin(
+    painter: &egui::Painter,
+    center: Pos2,
+    radius: f32,
+    angle: f32,
+    color: Color32,
+) {
     let segs = 18usize;
     let sweep = std::f32::consts::PI * 1.48;
     let mut pts = Vec::with_capacity(segs + 1);
     for i in 0..=segs {
         let a = angle - std::f32::consts::FRAC_PI_4 + sweep * (i as f32 / segs as f32);
-        pts.push(Pos2::new(center.x + a.cos() * radius, center.y + a.sin() * radius));
+        pts.push(Pos2::new(
+            center.x + a.cos() * radius,
+            center.y + a.sin() * radius,
+        ));
     }
     painter.add(egui::Shape::line(pts, Stroke::new(1.5, color)));
-    // Punta de flecha al final del arco
     let tip_a = angle - std::f32::consts::FRAC_PI_4 + sweep;
-    let tip = Pos2::new(center.x + tip_a.cos() * radius, center.y + tip_a.sin() * radius);
+    let tip = Pos2::new(
+        center.x + tip_a.cos() * radius,
+        center.y + tip_a.sin() * radius,
+    );
     let back1_a = tip_a - 0.55;
     let back2_a = tip_a + 0.35;
-    let p1 = Pos2::new(center.x + back1_a.cos() * (radius * 0.55), center.y + back1_a.sin() * (radius * 0.55));
-    let p2 = Pos2::new(center.x + back2_a.cos() * (radius * 1.25), center.y + back2_a.sin() * (radius * 1.25));
-    painter.add(egui::Shape::convex_polygon(vec![tip, p1, p2], color, Stroke::NONE));
+    let p1 = Pos2::new(
+        center.x + back1_a.cos() * (radius * 0.55),
+        center.y + back1_a.sin() * (radius * 0.55),
+    );
+    let p2 = Pos2::new(
+        center.x + back2_a.cos() * (radius * 1.25),
+        center.y + back2_a.sin() * (radius * 1.25),
+    );
+    painter.add(egui::Shape::convex_polygon(
+        vec![tip, p1, p2],
+        color,
+        Stroke::NONE,
+    ));
 }
 
-/// Pinta el icono oficial de Android (proporciones 24x24 exactas del SVG de Stitch) o Apple/iOS.
 pub fn paint_device_os_icon(
     painter: &egui::Painter,
     rect: Rect,
@@ -212,7 +235,6 @@ pub fn paint_device_os_icon(
     if os.eq_ignore_ascii_case("ios") {
         paint_glyph(painter, c, glyph::PHONE_IPHONE, rect.height() * 0.9, color);
     } else {
-        // viewBox 0 0 24 24 exacto del SVG Android (y base = 17, dome top = 9.5, antenas = 5.6)
         let s = rect.height().min(rect.width()) / 24.0;
         let ox = rect.left() + (rect.width() - 24.0 * s) * 0.5;
         let oy = rect.top() + (rect.height() - 24.0 * s) * 0.5;
@@ -228,28 +250,48 @@ pub fn paint_device_os_icon(
         painter.add(egui::Shape::convex_polygon(pts, color, Stroke::NONE));
         let ant_stroke = Stroke::new((1.55 * s).max(1.1), color);
         painter.line_segment(
-            [Pos2::new(ox + 8.9 * s, oy + 9.2 * s), Pos2::new(ox + 6.9 * s, oy + 5.7 * s)],
+            [
+                Pos2::new(ox + 8.9 * s, oy + 9.2 * s),
+                Pos2::new(ox + 6.9 * s, oy + 5.7 * s),
+            ],
             ant_stroke,
         );
         painter.line_segment(
-            [Pos2::new(ox + 15.1 * s, oy + 9.2 * s), Pos2::new(ox + 17.1 * s, oy + 5.7 * s)],
+            [
+                Pos2::new(ox + 15.1 * s, oy + 9.2 * s),
+                Pos2::new(ox + 17.1 * s, oy + 5.7 * s),
+            ],
             ant_stroke,
         );
-        painter.circle_filled(Pos2::new(ox + 8.3 * s, oy + 13.7 * s), (1.35 * s).max(0.95), eye_bg);
-        painter.circle_filled(Pos2::new(ox + 15.7 * s, oy + 13.7 * s), (1.35 * s).max(0.95), eye_bg);
+        painter.circle_filled(
+            Pos2::new(ox + 8.3 * s, oy + 13.7 * s),
+            (1.35 * s).max(0.95),
+            eye_bg,
+        );
+        painter.circle_filled(
+            Pos2::new(ox + 15.7 * s, oy + 13.7 * s),
+            (1.35 * s).max(0.95),
+            eye_bg,
+        );
     }
 }
 
-/// Dibuja la miniatura de badge de actualización (flecha abajo dentro de cápsula) sobre la esquina del icono Settings.
-pub fn paint_update_down_badge(painter: &egui::Painter, btn_rect: Rect, bg: Color32, accent: Color32) {
+pub fn paint_update_down_badge(
+    painter: &egui::Painter,
+    btn_rect: Rect,
+    bg: Color32,
+    accent: Color32,
+) {
     let badge_center = Pos2::new(btn_rect.right() - 7.5, btn_rect.bottom() - 7.5);
     painter.circle_filled(badge_center, 6.2, bg);
     painter.circle_stroke(badge_center, 6.2, Stroke::new(1.0, bg));
-    let arrow = [
-        Pos2::new(badge_center.x, badge_center.y - 3.2),
-        Pos2::new(badge_center.x, badge_center.y + 2.8),
-    ];
-    painter.line_segment(arrow, Stroke::new(1.7, accent));
+    painter.line_segment(
+        [
+            Pos2::new(badge_center.x, badge_center.y - 3.2),
+            Pos2::new(badge_center.x, badge_center.y + 2.8),
+        ],
+        Stroke::new(1.7, accent),
+    );
     painter.line_segment(
         [
             Pos2::new(badge_center.x - 2.4, badge_center.y + 0.6),
@@ -265,6 +307,3 @@ pub fn paint_update_down_badge(painter: &egui::Painter, btn_rect: Rect, bg: Colo
         Stroke::new(1.7, accent),
     );
 }
-
-#[allow(dead_code)]
-fn _unused_vec(_v: Vec2) {}

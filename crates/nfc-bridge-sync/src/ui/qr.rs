@@ -1,7 +1,7 @@
 //! Renderizado QR nativo en `egui` con nivel de corrección de errores H e icono central
 //! envuelto por un contorno en forma exacta con separación limpia sobre los módulos QR.
 
-use crate::egui_icons::{glyph, paint_glyph};
+use super::icons::{glyph, paint_glyph};
 use egui::{Color32, CornerRadius, Painter, Pos2, Rect, Vec2};
 use qrcode::{Color as QrColor, EcLevel, QrCode};
 
@@ -35,7 +35,6 @@ pub fn paint_qr_box(
         }
     }
 
-    // Icono central más grande y grueso con contorno de forma exacta y separación blanca limpia
     let icon_char = match method {
         "tcp" => glyph::WIFI,
         "bluetooth" => glyph::BLUETOOTH,
@@ -48,7 +47,6 @@ pub fn paint_qr_box(
     let contour_spread = 4.6_f32;
     let contour_font_size = icon_size + 6.0;
 
-    // 16 pasos radiales + centro en blanco dibujan el contorno siguiendo exactamente la silueta del icono
     paint_glyph(painter, center, icon_char, contour_font_size, Color32::WHITE);
     for i in 0..16 {
         let ang = (i as f32) * (std::f32::consts::TAU / 16.0);
@@ -61,7 +59,6 @@ pub fn paint_qr_box(
             Color32::WHITE,
         );
     }
-    // Doble pasada ligera para dar mayor grosor visual al icono central
     paint_glyph(painter, center, icon_char, icon_size, accent);
     paint_glyph(
         painter,

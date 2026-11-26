@@ -1,9 +1,9 @@
 //! # Driver Manager
 //!
 //! Verifica la presencia del controlador virtual PC/SC en Windows y permite
-//! consultar y descargar automáticamente la última versión desde el repositorio
-//! `HectorZaGa/nfc-bridge-driver`.
+//! consultar y descargar automáticamente la última versión desde `HectorZaGa/nfc-bridge-driver`.
 
+use crate::platform::hidden_command;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -32,11 +32,11 @@ pub struct GitHubRelease {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DriverStatus {
-    /// El driver está instalado y el canal IPC (Named Pipe) responde
+    /// El driver está instalado y el canal IPC (Named Pipe) responde.
     Running,
-    /// El servicio/driver parece instalado pero el Pipe no está abierto
+    /// El servicio/driver está instalado pero el Pipe no está abierto.
     InstalledStopped,
-    /// El driver no se encuentra instalado en Windows
+    /// El driver no se encuentra instalado en Windows.
     NotInstalled,
 }
 
@@ -44,6 +44,12 @@ pub struct DriverManager {
     repo_owner: String,
     repo_name: String,
     client: reqwest::Client,
+}
+
+impl Default for DriverManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DriverManager {
@@ -63,23 +69,18 @@ impl DriverManager {
         #[cfg(target_os = "windows")]
         {
             use std::fs::OpenOptions;
-            let pipes = [DRIVER_NAMED_PIPE, ALT_DRIVER_NAMED_PIPE];
-
-            for pipe in pipes {
+            for pipe in [DRIVER_NAMED_PIPE, ALT_DRIVER_NAMED_PIPE] {
                 match OpenOptions::new().read(true).write(true).open(pipe) {
                     Ok(_) => return DriverStatus::Running,
                     Err(e) => {
-                        let raw_code = e.raw_os_error().unwrap_or(0);
-                        // ERROR_PIPE_BUSY (231) indica que el Named Pipe del driver sí existe y está activo
-                        if raw_code == 231 {
+                        if e.raw_os_error().unwrap_or(0) == 231 {
                             return DriverStatus::Running;
                         }
                     }
                 }
             }
 
-            // Si el pipe no está abierto, verificar si el servicio está instalado en Windows
-            if let Ok(out) = std::process::Command::new("sc.exe")
+            if let Ok(out) = hidden_command("sc.exe")
                 .args(["query", "NfcBridgeDriver"])
                 .output()
             {
@@ -96,7 +97,6 @@ impl DriverManager {
         }
     }
 
-    /// Consulta en la API de GitHub la versión más reciente publicada de nfc-bridge-driver.
     pub async fn fetch_latest_release(&self) -> Result<GitHubRelease> {
         let url = format!(
             "https://api.github.com/repos/{}/{}/releases/latest",
@@ -127,7 +127,6 @@ impl DriverManager {
         Ok(release)
     }
 
-    /// Descarga un archivo de release del driver al destino especificado.
     pub async fn download_driver_asset(
         &self,
         asset_url: &str,
@@ -163,32 +162,21 @@ impl DriverManager {
         Ok(target_path)
     }
 
-    /// Busca si el binario del driver se encuentra junto a la aplicación (útil para paquetes portables).
     pub fn find_local_driver_binary(&self) -> Option<PathBuf> {
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(parent) = exe_path.parent() {
-                let candidates = [
-                    parent.join("nfc-bridge-driver.exe"),
-                    parent.join("driver").join("nfc-bridge-driver.exe"),
-                    parent.join("..").join("driver").join("nfc-bridge-driver.exe"),
-                ];
-                for candidate in candidates {
-                    if candidate.exists() {
-                        return Some(candidate);
-                    }
-                }
-            }
-        }
-        None
+        let parent = std::env::current_exe().ok()?.parent()?.to_path_buf();
+        let candidates = [
+            parent.join("nfc-bridge-driver.exe"),
+            parent.join("driver").join("nfc-bridge-driver.exe"),
+            parent.join("..").join("driver").join("nfc-bridge-driver.exe"),
+        ];
+        candidates.into_iter().find(|c| c.exists())
     }
 
-    /// Inicia el driver virtual silenciosamente en segundo plano.
     pub fn start_local_driver_background(&self, driver_exe: &Path) -> std::io::Result<std::process::Child> {
         info!("Iniciando driver virtual silencioso desde {:?}", driver_exe);
-        std::process::Command::new(driver_exe).spawn()
+        hidden_command(driver_exe).spawn()
     }
 
-    /// Registra e inicia el servicio Windows `NfcBridgeDriver` con un solo UAC.
     pub fn install_driver_service_elevated(&self, driver_exe: &Path) -> std::io::Result<bool> {
         let escaped_exe = driver_exe.to_string_lossy().replace('\'', "''");
         let script = format!(
@@ -196,7 +184,7 @@ impl DriverManager {
             escaped_exe
         );
 
-        let status = std::process::Command::new("powershell.exe")
+        let status = hidden_command("powershell.exe")
             .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
             .status()?;
 
