@@ -216,5 +216,15 @@
   "modal_restart_title": "Update ready",
   "modal_restart_desc": "The new version has been downloaded beside the executable. Restart the app to apply it.",
   "modal_restart_later": "Later",
-  "modal_restart_now": "Restart now"
+  "modal_restart_now": "Restart now",
+  "tray_pc_badge": "PC",
+  "tray_open_main": "Open main window",
+  "tray_switch_device": "Switch mobile device",
+  "tray_show_qr": "Show connection QR code",
+  "tray_pause_reader": "Pause NFC reader",
+  "tray_resume_reader": "Resume NFC reader",
+  "tray_usb_priority": "USB Cable Priority",
+  "tray_options": "Options",
+  "tray_disconnect": "Disconnect device",
+  "tray_exit": "Exit NFC Bridge"
 }

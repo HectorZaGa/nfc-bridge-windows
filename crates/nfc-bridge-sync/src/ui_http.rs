@@ -53,6 +53,8 @@ struct CommandRequest {
     auto_update_driver: Option<bool>,
     #[serde(default)]
     language: Option<String>,
+    #[serde(default)]
+    settings_sidebar_compact: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -269,20 +271,45 @@ async fn handle_http_conn(
         return Ok(());
     }
 
+    let (status_code, status_text, content_type, resp_body) =
+        dispatch_ui_request(method, path, body, &ipc, &updater).await;
+
+    let response = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nX-Frame-Options: DENY\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{}",
+        status_code,
+        status_text,
+        content_type,
+        resp_body.as_bytes().len(),
+        resp_body
+    );
+    stream.write_all(response.as_bytes()).await?;
+    Ok(())
+}
+
+pub async fn dispatch_ui_request(
+    method: &str,
+    path: &str,
+    body: &str,
+    ipc: &DriverIpcClient,
+    updater: &DesktopUpdater,
+) -> (u16, &'static str, &'static str, String) {
     let clean_path = path.split('?').next().unwrap_or("/");
-    let (status, content_type, resp_body) = match (method, clean_path) {
+    match (method, clean_path) {
         ("GET", "/") | ("GET", "/index.html") => (
-            "200 OK",
+            200,
+            "OK",
             "text/html; charset=utf-8",
             EmbeddedUi::INDEX_HTML.to_string(),
         ),
         ("GET", "/i18n/en.json") => (
-            "200 OK",
+            200,
+            "OK",
             "application/json; charset=utf-8",
             EmbeddedUi::EN_I18N_JSON.to_string(),
         ),
         ("GET", "/i18n/es.json") => (
-            "200 OK",
+            200,
+            "OK",
             "application/json; charset=utf-8",
             EmbeddedUi::ES_I18N_JSON.to_string(),
         ),
@@ -300,7 +327,7 @@ async fn handle_http_conn(
                 }
             }
             let json = val.to_string();
-            ("200 OK", "application/json", json)
+            (200, "OK", "application/json", json)
         }
         ("POST", "/api/qr") => match serde_json::from_str::<QrRequest>(body) {
             Ok(req) => match ipc.request_pairing_qr(&req.method).await {
@@ -318,23 +345,26 @@ async fn handle_http_conn(
                             "svg": svg_markup
                         })
                         .to_string();
-                        ("200 OK", "application/json", json)
+                        (200, "OK", "application/json", json)
                     }
                     Err(err) => (
-                        "500 Internal Server Error",
+                        500,
+                        "Internal Server Error",
                         "application/json",
                         serde_json::json!({"ok": false, "error": err}).to_string(),
                     ),
                     }
                 }
                 Err(err) => (
-                    "503 Service Unavailable",
+                    503,
+                    "Service Unavailable",
                     "application/json",
                     serde_json::json!({"ok": false, "error": err.to_string()}).to_string(),
                 ),
             },
             Err(_) => (
-                "400 Bad Request",
+                400,
+                "Bad Request",
                 "application/json",
                 r#"{"ok":false,"error":"JSON inválido"}"#.to_string(),
             ),
@@ -468,6 +498,9 @@ async fn handle_http_conn(
                                 .auto_update_driver
                                 .unwrap_or(cur.auto_update_driver),
                             language: req.language.unwrap_or(cur.language),
+                            settings_sidebar_compact: req
+                                .settings_sidebar_compact
+                                .unwrap_or(cur.settings_sidebar_compact),
                         };
                         ipc.update_ui_settings(updated).await;
                         Ok(())
@@ -562,16 +595,18 @@ async fn handle_http_conn(
                     _ => Err(anyhow::anyhow!("Comando desconocido")),
                 };
                 match res {
-                    Ok(()) => ("200 OK", "application/json", r#"{"ok":true}"#.to_string()),
+                    Ok(()) => (200, "OK", "application/json", r#"{"ok":true}"#.to_string()),
                     Err(e) => (
-                        "503 Service Unavailable",
+                        503,
+                        "Service Unavailable",
                         "application/json",
                         serde_json::json!({"ok": false, "error": e.to_string()}).to_string(),
                     ),
                 }
             }
             Err(_) => (
-                "400 Bad Request",
+                400,
+                "Bad Request",
                 "application/json",
                 r#"{"ok":false}"#.to_string(),
             ),
@@ -587,15 +622,17 @@ async fn handle_http_conn(
                     .unwrap_or(true);
                 if !valid {
                     (
-                        "400 Bad Request",
+                        400,
+                        "Bad Request",
                         "application/json",
                         r#"{"ok":false,"error":"La URL del Relay debe usar https:// o wss://"}"#.to_string(),
                     )
                 } else {
                     match ipc.send_command(IpcCommand::SetRelayUrl { url: req.url }).await {
-                        Ok(()) => ("200 OK", "application/json", r#"{"ok":true}"#.to_string()),
+                        Ok(()) => (200, "OK", "application/json", r#"{"ok":true}"#.to_string()),
                         Err(e) => (
-                            "503 Service Unavailable",
+                            503,
+                            "Service Unavailable",
                             "application/json",
                             serde_json::json!({"ok": false, "error": e.to_string()}).to_string(),
                         ),
@@ -603,27 +640,19 @@ async fn handle_http_conn(
                 }
             }
             Err(_) => (
-                "400 Bad Request",
+                400,
+                "Bad Request",
                 "application/json",
                 r#"{"ok":false}"#.to_string(),
             ),
         },
         _ => (
-            "404 Not Found",
+            404,
+            "Not Found",
             "text/plain; charset=utf-8",
             "Not Found".to_string(),
         ),
-    };
-
-    let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nX-Frame-Options: DENY\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{}",
-        status,
-        content_type,
-        resp_body.as_bytes().len(),
-        resp_body
-    );
-    stream.write_all(response.as_bytes()).await?;
-    Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -701,6 +730,7 @@ mod tests {
         assert!(resp1.starts_with("HTTP/1.1 200 OK\r\n"), "resp1={}", &resp1[..resp1.len().min(120)]);
         assert!(resp1.contains("Content-Type: text/html; charset=utf-8"));
         assert!(resp1.contains("settings-sidebar"));
+        assert!(resp1.contains("tray-popup-shell"));
 
         // 2. GET /i18n/en.json -> 200 OK application/json
         let mut s2 = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
@@ -734,7 +764,7 @@ mod tests {
 
         // Simulate WebView2/Chromium splitting headers and JSON body into two TCP writes
         let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-        let body = r##"{"command":"save_ui_settings","theme_mode":"light","language":"en","use_windows_accent":false,"custom_accent_hex":"#10B981"}"##;
+        let body = r##"{"command":"save_ui_settings","theme_mode":"light","language":"en","use_windows_accent":false,"custom_accent_hex":"#10B981","settings_sidebar_compact":true}"##;
         let headers = format!(
             "POST /api/command HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://127.0.0.1:{port}\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             body.len()
@@ -759,6 +789,7 @@ mod tests {
         assert!(resp2.contains(r#""theme_mode":"light""#));
         assert!(resp2.contains(r#""language":"en""#));
         assert!(resp2.contains(r##""custom_accent_hex":"#10B981""##));
+        assert!(resp2.contains(r#""settings_sidebar_compact":true"#));
 
         server_task.await.unwrap();
         ipc.update_ui_settings(prev_settings).await;

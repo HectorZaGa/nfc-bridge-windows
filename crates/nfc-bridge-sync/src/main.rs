@@ -102,12 +102,12 @@ fn main() -> Result<()> {
     let headless = std::env::args().any(|a| a == "--headless");
 
     info!(
-        "NFC Bridge Sync v{} ({}) | IP={} | PC={} | UI=http://127.0.0.1:{}",
+        "NFC Bridge Sync v{} ({}) | IP={} | PC={} | Modo={}",
         env!("CARGO_PKG_VERSION"),
         env!("NFC_BRIDGE_BUILD_ID"),
         local_ip,
         config.pc_name,
-        DEFAULT_UI_HTTP_PORT
+        if headless { "headless-http" } else { "desktop-native" }
     );
 
     info!("Directorio de datos: {:?}", config.data_dir);
@@ -164,18 +164,22 @@ fn main() -> Result<()> {
             .await;
     });
 
-    let ui_server = DesktopUiServer::with_updater(
-        ipc_client.clone(),
-        updater.clone(),
-        DEFAULT_UI_HTTP_PORT,
-    );
-
+    let rt_handle = rt.handle().clone();
+    let ipc_for_ui = ipc_client.clone();
+    let upd_for_ui = updater.clone();
     let data_dir = config.data_dir.clone();
     let runtime_handle = std::thread::spawn(move || {
         rt.block_on(async move {
-            tokio::spawn(async move {
-                ui_server.run().await;
-            });
+            if headless {
+                let ui_server = DesktopUiServer::with_updater(
+                    ipc_client.clone(),
+                    updater.clone(),
+                    DEFAULT_UI_HTTP_PORT,
+                );
+                tokio::spawn(async move {
+                    ui_server.run().await;
+                });
+            }
 
             {
                 let updater_init = updater.clone();
@@ -202,17 +206,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    for _ in 0..40 {
-        if std::net::TcpStream::connect(("127.0.0.1", DEFAULT_UI_HTTP_PORT)).is_ok() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
     #[cfg(target_os = "windows")]
     {
         nfc_bridge_sync::desktop_window::run_desktop_ui(
             "NFC Bridge Sync",
-            DEFAULT_UI_HTTP_PORT,
+            ipc_for_ui,
+            upd_for_ui,
+            rt_handle,
             data_dir,
         )?;
     }

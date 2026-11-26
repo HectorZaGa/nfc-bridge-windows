@@ -225,6 +225,8 @@ pub struct SyncUiSettings {
     pub auto_update_driver: bool,
     #[serde(default = "default_language")]
     pub language: String,
+    #[serde(default)]
+    pub settings_sidebar_compact: bool,
 }
 
 impl Default for SyncUiSettings {
@@ -236,6 +238,7 @@ impl Default for SyncUiSettings {
             auto_update_app: false,
             auto_update_driver: false,
             language: default_language(),
+            settings_sidebar_compact: false,
         }
     }
 }
@@ -388,6 +391,7 @@ impl DriverIpcClient {
                 "en" | "es" | "system" => settings.language,
                 _ => "system".to_string(),
             },
+            settings_sidebar_compact: settings.settings_sidebar_compact,
         };
         save_ui_settings(&clean);
         let mut st = self.state.write().await;

@@ -1,22 +1,30 @@
-//! Host de escritorio nativo sin bordes (WebView2 transparente vía `tao` + `wry`)
-//! para NFC Bridge Sync y NFC Bridge Tools Desktop.
+//! Host de escritorio nativo sin bordes (WebView2 vía `tao` + `wry` con protocolo interno
+//! `nfcbridge://localhost` — sin abrir puertos HTTP locales) para NFC Bridge Sync y Tools Desktop.
 //!
-//! - Ventana principal sin barra de título nativa de Windows (`decorations: false`, `transparent: true`)
-//!   con arrastre por cabecera, minimizar, cerrar y redimensionado exacto al contenedor HTML.
-//! - Ventana de Opciones totalmente independiente (`?view=settings`) sin difuminar ni oscurecer
-//!   la ventana principal.
+//! - Ventana principal sin barra de título nativa de Windows (`decorations: false`), esquinas DWM
+//!   redondeadas y botón de cerrar (`X`) que oculta la ventana en la bandeja del sistema.
+//! - Ventana de Opciones independiente (`/?view=settings`) sin difuminar la ventana principal y con
+//!   cierre instantáneo (se oculta para reabrir sin latencia).
+//! - Menú emergente personalizado en la bandeja del sistema (`/?view=tray`) basado en el diseño Stitch.
 
 #[cfg(target_os = "windows")]
-pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBuf) -> anyhow::Result<()> {
+pub fn run_desktop_ui(
+    app_title: &str,
+    ipc: crate::server::DriverIpcClient,
+    updater: crate::updater::DesktopUpdater,
+    rt_handle: tokio::runtime::Handle,
+    data_dir: std::path::PathBuf,
+) -> anyhow::Result<()> {
+    use std::borrow::Cow;
     use std::cell::RefCell;
     use std::rc::Rc;
-    use tao::dpi::{LogicalPosition, LogicalSize};
+    use tao::dpi::{LogicalPosition, LogicalSize, PhysicalPosition};
     use tao::event::{Event, WindowEvent};
     use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
+    use tao::platform::windows::WindowBuilderExtWindows;
     use tao::window::{Icon, Window, WindowBuilder};
-    use tray_icon::menu::{Menu, MenuEvent, MenuItem};
-    use tray_icon::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     use tracing::warn;
+    use tray_icon::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     use wry::{WebContext, WebView, WebViewBuilder};
 
     #[derive(Debug, Clone)]
@@ -25,6 +33,7 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
         MinimizeMain,
         CloseMain,
         ShowMain,
+        ShowMainQr,
         ReadyMain,
         ResizeMain(f64, f64),
         OpenSettings,
@@ -33,54 +42,13 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
         CloseSettings,
         ReadySettings,
         ResizeSettings(f64, f64),
+        ToggleTrayPopup(PhysicalPosition<f64>),
+        ReadyTray,
+        CloseTray,
+        ResizeTray(f64, f64),
         UiSettingsChanged,
         ThemeChanged(bool),
         QuitApp,
-    }
-
-    fn apply_native_frameless_style(win: &Window, dark: bool) {
-        use tao::platform::windows::WindowExtWindows;
-        use windows_sys::Win32::Graphics::Dwm::{
-            DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
-            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
-        };
-        use windows_sys::Win32::Graphics::Gdi::CreateSolidBrush;
-        use windows_sys::Win32::UI::WindowsAndMessaging::{SetClassLongPtrW, GCLP_HBRBACKGROUND};
-
-        let hwnd = win.hwnd() as windows_sys::Win32::Foundation::HWND;
-        if hwnd.is_null() {
-            return;
-        }
-        unsafe {
-            let corner_pref: u32 = DWMWCP_ROUND as u32;
-            let _ = DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
-                &corner_pref as *const _ as *const _,
-                std::mem::size_of::<u32>() as u32,
-            );
-            // COLORREF = 0x00BBGGRR: dark #313030 -> 0x00303031, light #D9DEE7 -> 0x00E7DED9
-            let border_color: u32 = if dark { 0x00303031 } else { 0x00E7DED9 };
-            let _ = DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_BORDER_COLOR as u32,
-                &border_color as *const _ as *const _,
-                std::mem::size_of::<u32>() as u32,
-            );
-            let dark_flag: i32 = if dark { 1 } else { 0 };
-            let _ = DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
-                &dark_flag as *const _ as *const _,
-                std::mem::size_of::<i32>() as u32,
-            );
-            // Background brush: dark #121212 -> 0x00121212, light #F5F6F8 -> 0x00F8F6F5
-            let bg_color: u32 = if dark { 0x00121212 } else { 0x00F8F6F5 };
-            let brush = CreateSolidBrush(bg_color);
-            if !brush.is_null() {
-                SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, brush as isize);
-            }
-        }
     }
 
     fn build_nfc_rgba_icon() -> Option<(Vec<u8>, u32, u32)> {
@@ -91,7 +59,6 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                 let dx = (x as f32 - 15.5).abs();
                 let dy = (y as f32 - 15.5).abs();
                 let idx = (y * size + x) * 4;
-                // Fondo azul eléctrico con esquinas redondeadas
                 let corner = if dx > 10.5 && dy > 10.5 {
                     ((dx - 10.5).powi(2) + (dy - 10.5).powi(2)).sqrt() <= 5.0
                 } else {
@@ -123,19 +90,67 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
         Some((rgba, size as u32, size as u32))
     }
 
+    fn apply_native_frameless_style(win: &Window, dark: bool) {
+        use tao::platform::windows::WindowExtWindows;
+        use windows_sys::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        };
+        use windows_sys::Win32::Graphics::Gdi::CreateSolidBrush;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SetClassLongPtrW, GCLP_HBRBACKGROUND};
+
+        let hwnd = win.hwnd() as windows_sys::Win32::Foundation::HWND;
+        if hwnd.is_null() {
+            return;
+        }
+        unsafe {
+            let corner_pref: u32 = DWMWCP_ROUND as u32;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                &corner_pref as *const _ as *const _,
+                std::mem::size_of::<u32>() as u32,
+            );
+            let border_color: u32 = if dark { 0x00303031 } else { 0x00E7DED9 };
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR as u32,
+                &border_color as *const _ as *const _,
+                std::mem::size_of::<u32>() as u32,
+            );
+            let dark_flag: i32 = if dark { 1 } else { 0 };
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
+                &dark_flag as *const _ as *const _,
+                std::mem::size_of::<i32>() as u32,
+            );
+            let bg_color: u32 = if dark { 0x00121212 } else { 0x00F8F6F5 };
+            let brush = CreateSolidBrush(bg_color);
+            if !brush.is_null() {
+                SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, brush as isize);
+            }
+        }
+    }
+
     fn dispatch_ipc_cmd(proxy: &EventLoopProxy<UiWindowEvent>, msg: &str) {
         let parts: Vec<&str> = msg.trim().split(':').collect();
         let evt = match parts.as_slice() {
             ["drag_main"] => Some(UiWindowEvent::DragMain),
             ["minimize_main"] => Some(UiWindowEvent::MinimizeMain),
             ["close_main"] => Some(UiWindowEvent::CloseMain),
+            ["show_main"] => Some(UiWindowEvent::ShowMain),
+            ["show_main_qr"] => Some(UiWindowEvent::ShowMainQr),
             ["ready_main"] => Some(UiWindowEvent::ReadyMain),
             ["open_settings"] => Some(UiWindowEvent::OpenSettings),
             ["drag_settings"] => Some(UiWindowEvent::DragSettings),
             ["minimize_settings"] => Some(UiWindowEvent::MinimizeSettings),
             ["close_settings"] => Some(UiWindowEvent::CloseSettings),
             ["ready_settings"] => Some(UiWindowEvent::ReadySettings),
+            ["ready_tray"] => Some(UiWindowEvent::ReadyTray),
+            ["close_tray"] => Some(UiWindowEvent::CloseTray),
             ["ui_settings_changed"] => Some(UiWindowEvent::UiSettingsChanged),
+            ["quit_app"] => Some(UiWindowEvent::QuitApp),
             ["theme", "dark"] => Some(UiWindowEvent::ThemeChanged(true)),
             ["theme", "light"] => Some(UiWindowEvent::ThemeChanged(false)),
             ["resize_main", w, h] => {
@@ -152,10 +167,78 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                     None
                 }
             }
+            ["resize_tray", w, h] => {
+                if let (Ok(wf), Ok(hf)) = (w.parse::<f64>(), h.parse::<f64>()) {
+                    Some(UiWindowEvent::ResizeTray(wf, hf))
+                } else {
+                    None
+                }
+            }
             _ => None,
         };
         if let Some(e) = evt {
             let _ = proxy.send_event(e);
+        }
+    }
+
+    fn attach_custom_protocol<'a>(
+        builder: WebViewBuilder<'a>,
+        rt: tokio::runtime::Handle,
+        ipc: crate::server::DriverIpcClient,
+        updater: crate::updater::DesktopUpdater,
+    ) -> WebViewBuilder<'a> {
+        builder.with_asynchronous_custom_protocol(
+            "nfcbridge".into(),
+            move |_webview_id, request, responder| {
+                let method = request.method().as_str().to_string();
+                let path = request
+                    .uri()
+                    .path_and_query()
+                    .map(|pq| pq.as_str().to_string())
+                    .unwrap_or_else(|| "/".to_string());
+                let body = String::from_utf8_lossy(request.body()).to_string();
+                let ipc_c = ipc.clone();
+                let upd_c = updater.clone();
+                rt.spawn(async move {
+                    let (status_code, _status_text, content_type, resp_body) =
+                        crate::ui_http::dispatch_ui_request(&method, &path, &body, &ipc_c, &upd_c)
+                            .await;
+                    let response = wry::http::Response::builder()
+                        .status(status_code)
+                        .header("Content-Type", content_type)
+                        .header("Cache-Control", "no-store")
+                        .header("Access-Control-Allow-Origin", "http://nfcbridge.localhost")
+                        .body(Cow::Owned(resp_body.into_bytes()))
+                        .unwrap_or_else(|_| {
+                            wry::http::Response::builder()
+                                .status(500)
+                                .body(Cow::Borrowed(b"{}" as &[u8]))
+                                .unwrap()
+                        });
+                    responder.respond(response);
+                });
+            },
+        )
+    }
+
+    fn position_tray_popup(
+        win: &Window,
+        click_pos: PhysicalPosition<f64>,
+        w: f64,
+        h: f64,
+    ) {
+        let mon = win.current_monitor().or_else(|| win.primary_monitor());
+        if let Some(mon) = mon {
+            let sf = mon.scale_factor();
+            let m_size = mon.size().to_logical::<f64>(sf);
+            let m_pos = mon.position().to_logical::<f64>(sf);
+            let click_log = click_pos.to_logical::<f64>(sf);
+
+            let right_edge = m_pos.x + m_size.width - 12.0;
+            let bottom_edge = m_pos.y + m_size.height - 56.0;
+            let x = (click_log.x - w + 18.0).clamp(m_pos.x + 12.0, (right_edge - w).max(m_pos.x + 12.0));
+            let y = (click_log.y - h - 12.0).clamp(m_pos.y + 12.0, (bottom_edge - h).max(m_pos.y + 12.0));
+            win.set_outer_position(LogicalPosition::new(x, y));
         }
     }
 
@@ -172,7 +255,8 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
 
     let webview_data_dir = data_dir.join("webview2");
     let _ = std::fs::create_dir_all(&webview_data_dir);
-    let web_ctx: Rc<RefCell<WebContext>> = Rc::new(RefCell::new(WebContext::new(Some(webview_data_dir))));
+    let web_ctx: Rc<RefCell<WebContext>> =
+        Rc::new(RefCell::new(WebContext::new(Some(webview_data_dir))));
 
     let init_dark = match crate::server::load_ui_settings().theme_mode.as_str() {
         "light" => false,
@@ -208,42 +292,30 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
     let main_window = main_builder.build(&event_loop)?;
     apply_native_frameless_style(&main_window, init_dark);
 
-    let main_url = format!("http://127.0.0.1:{}/?view=main", ui_port);
+    let main_url = "http://nfcbridge.localhost/?view=main";
     let ipc_proxy_main = proxy.clone();
     let main_webview = {
         let mut ctx = web_ctx.borrow_mut();
-        WebViewBuilder::new_with_web_context(&mut ctx)
+        let builder = WebViewBuilder::new_with_web_context(&mut ctx)
             .with_transparent(false)
             .with_background_color(init_bg)
-            .with_url(&main_url)
+            .with_url(main_url)
             .with_ipc_handler(move |req| {
                 dispatch_ipc_cmd(&ipc_proxy_main, req.body());
-            })
+            });
+        attach_custom_protocol(builder, rt_handle.clone(), ipc.clone(), updater.clone())
             .build(&main_window)?
     };
 
-    // Safety fallback reveal if WebView2 takes longer than expected on cold start
     let fallback_proxy = proxy.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(800));
         let _ = fallback_proxy.send_event(UiWindowEvent::ReadyMain);
     });
 
-    // Bandeja del sistema opcional (abrir, opciones, salir)
-    let tray_menu = Menu::new();
-    let item_open = MenuItem::new(app_title, true, None);
-    let item_opts = MenuItem::new("Options / Opciones", true, None);
-    let item_quit = MenuItem::new("Exit / Salir", true, None);
-    let open_id = item_open.id().clone();
-    let opts_id = item_opts.id().clone();
-    let quit_id = item_quit.id().clone();
-    let _ = tray_menu.append(&item_open);
-    let _ = tray_menu.append(&item_opts);
-    let _ = tray_menu.append(&item_quit);
-
+    // Icono en bandeja del sistema (clic izquierdo abre ventana; clic derecho abre popup Stitch)
     let _tray = tray_icon_img.and_then(|ic| {
         TrayIconBuilder::new()
-            .with_menu(Box::new(tray_menu))
             .with_tooltip(app_title)
             .with_icon(ic)
             .build()
@@ -253,32 +325,34 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
     let proxy_tray = proxy.clone();
     TrayIconEvent::set_event_handler(Some(move |event| {
         if let TrayIconEvent::Click {
-            button: MouseButton::Left,
+            button,
             button_state: MouseButtonState::Up,
+            position,
             ..
         } = event
         {
-            let _ = proxy_tray.send_event(UiWindowEvent::ShowMain);
+            match button {
+                MouseButton::Left => {
+                    let _ = proxy_tray.send_event(UiWindowEvent::ShowMain);
+                }
+                MouseButton::Right => {
+                    let _ = proxy_tray.send_event(UiWindowEvent::ToggleTrayPopup(position));
+                }
+                _ => {}
+            }
         }
     }));
-
-    let proxy_menu = proxy.clone();
-    MenuEvent::set_event_handler(Some(std::sync::Arc::new(move |event: MenuEvent| {
-        if event.id == open_id {
-            let _ = proxy_menu.send_event(UiWindowEvent::ShowMain);
-        } else if event.id == opts_id {
-            let _ = proxy_menu.send_event(UiWindowEvent::OpenSettings);
-        } else if event.id == quit_id {
-            let _ = proxy_menu.send_event(UiWindowEvent::QuitApp);
-        }
-    })));
 
     let main_id = main_window.id();
     let mut main_shown = false;
     let mut current_dark = init_dark;
     let mut settings_pair: Option<(Window, WebView)> = None;
+    let mut tray_pair: Option<(Window, WebView)> = None;
+    let mut tray_size = (296.0_f64, 412.0_f64);
     let settings_title = format!("{} - Options", app_title);
-    let settings_url = format!("http://127.0.0.1:{}/?view=settings", ui_port);
+    let tray_title = app_title.to_string();
+    let settings_url = "http://nfcbridge.localhost/?view=settings";
+    let tray_url = "http://nfcbridge.localhost/?view=tray";
 
     event_loop.run(move |event, elwt, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -290,9 +364,25 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                 ..
             } => {
                 if window_id == main_id {
-                    settings_pair = None;
-                    *control_flow = ControlFlow::Exit;
+                    // Al cerrar la ventana principal se oculta al System Tray (no termina el proceso)
+                    main_shown = false;
+                    main_window.set_visible(false);
                 } else if let Some((ref win, _)) = settings_pair {
+                    if win.id() == window_id {
+                        win.set_visible(false);
+                    }
+                } else if let Some((ref win, _)) = tray_pair {
+                    if win.id() == window_id {
+                        win.set_visible(false);
+                    }
+                }
+            }
+            Event::WindowEvent {
+                window_id,
+                event: WindowEvent::Focused(false),
+                ..
+            } => {
+                if let Some((ref win, _)) = tray_pair {
                     if win.id() == window_id {
                         win.set_visible(false);
                     }
@@ -313,12 +403,36 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                     }
                 }
                 UiWindowEvent::ShowMain => {
+                    if let Some((ref win, _)) = tray_pair {
+                        win.set_visible(false);
+                    }
                     main_shown = true;
                     main_window.set_visible(true);
                     main_window.set_minimized(false);
                     main_window.set_focus();
+                    let _ = main_webview.evaluate_script(
+                        "if (window.__nbRefreshNow) window.__nbRefreshNow();",
+                    );
                 }
-                UiWindowEvent::CloseMain | UiWindowEvent::QuitApp => {
+                UiWindowEvent::ShowMainQr => {
+                    if let Some((ref win, _)) = tray_pair {
+                        win.set_visible(false);
+                    }
+                    main_shown = true;
+                    main_window.set_visible(true);
+                    main_window.set_minimized(false);
+                    main_window.set_focus();
+                    let _ = main_webview.evaluate_script(
+                        "if (window.__nbOpenQuickQr) window.__nbOpenQuickQr();",
+                    );
+                }
+                UiWindowEvent::CloseMain => {
+                    // Cerrar la ventana principal minimiza al System Tray
+                    main_shown = false;
+                    main_window.set_visible(false);
+                }
+                UiWindowEvent::QuitApp => {
+                    tray_pair = None;
                     settings_pair = None;
                     let _ = &main_webview;
                     *control_flow = ControlFlow::Exit;
@@ -332,6 +446,16 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                     let _ = main_webview.evaluate_script(
                         "if (window.__nbRefreshNow) window.__nbRefreshNow();",
                     );
+                    if let Some((_, ref sview)) = settings_pair {
+                        let _ = sview.evaluate_script(
+                            "if (window.__nbRefreshNow) window.__nbRefreshNow();",
+                        );
+                    }
+                    if let Some((_, ref tview)) = tray_pair {
+                        let _ = tview.evaluate_script(
+                            "if (window.__nbRefreshNow) window.__nbRefreshNow();",
+                        );
+                    }
                 }
                 UiWindowEvent::ThemeChanged(is_dark) => {
                     if current_dark != is_dark {
@@ -340,9 +464,15 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                         if let Some((ref win, _)) = settings_pair {
                             apply_native_frameless_style(win, is_dark);
                         }
+                        if let Some((ref win, _)) = tray_pair {
+                            apply_native_frameless_style(win, is_dark);
+                        }
                     }
                 }
                 UiWindowEvent::OpenSettings => {
+                    if let Some((ref win, _)) = tray_pair {
+                        win.set_visible(false);
+                    }
                     if let Some((ref win, ref sview)) = settings_pair {
                         let _ = sview.evaluate_script(
                             "if (window.__nbRefreshNow) window.__nbRefreshNow();",
@@ -381,14 +511,20 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                                 };
                                 let ipc_proxy_s = proxy.clone();
                                 let mut ctx = web_ctx.borrow_mut();
-                                match WebViewBuilder::new_with_web_context(&mut ctx)
+                                let builder = WebViewBuilder::new_with_web_context(&mut ctx)
                                     .with_transparent(false)
                                     .with_background_color(bg)
-                                    .with_url(&settings_url)
+                                    .with_url(settings_url)
                                     .with_ipc_handler(move |req| {
                                         dispatch_ipc_cmd(&ipc_proxy_s, req.body());
-                                    })
-                                    .build(&swin)
+                                    });
+                                match attach_custom_protocol(
+                                    builder,
+                                    rt_handle.clone(),
+                                    ipc.clone(),
+                                    updater.clone(),
+                                )
+                                .build(&swin)
                                 {
                                     Ok(sview) => {
                                         settings_pair = Some((swin, sview));
@@ -430,7 +566,106 @@ pub fn run_desktop_ui(app_title: &str, ui_port: u16, data_dir: std::path::PathBu
                 }
                 UiWindowEvent::ResizeSettings(w, h) => {
                     if let Some((ref win, _)) = settings_pair {
-                        win.set_inner_size(LogicalSize::new(w.clamp(540.0, 960.0), h.clamp(380.0, 760.0)));
+                        win.set_inner_size(LogicalSize::new(
+                            w.clamp(540.0, 960.0),
+                            h.clamp(380.0, 760.0),
+                        ));
+                    }
+                }
+                UiWindowEvent::ToggleTrayPopup(click_pos) => {
+                    if let Some((ref win, ref tview)) = tray_pair {
+                        if win.is_visible() {
+                            win.set_visible(false);
+                        } else {
+                            position_tray_popup(win, click_pos, tray_size.0, tray_size.1);
+                            let _ = tview.evaluate_script(
+                                "if (window.__nbRefreshNow) window.__nbRefreshNow();",
+                            );
+                            win.set_visible(true);
+                            win.set_focus();
+                        }
+                    } else {
+                        let (tw, th) = tray_size;
+                        let mut tb = WindowBuilder::new()
+                            .with_title(&tray_title)
+                            .with_decorations(false)
+                            .with_transparent(false)
+                            .with_visible(false)
+                            .with_resizable(false)
+                            .with_always_on_top(true)
+                            .with_skip_taskbar(true)
+                            .with_inner_size(LogicalSize::new(tw, th));
+                        if let Some(ref ic) = window_icon {
+                            tb = tb.with_window_icon(Some(ic.clone()));
+                        }
+                        match tb.build(elwt) {
+                            Ok(twin) => {
+                                apply_native_frameless_style(&twin, current_dark);
+                                position_tray_popup(&twin, click_pos, tw, th);
+                                let bg = if current_dark {
+                                    (30, 30, 30, 255)
+                                } else {
+                                    (255, 255, 255, 255)
+                                };
+                                let ipc_proxy_t = proxy.clone();
+                                let mut ctx = web_ctx.borrow_mut();
+                                let builder = WebViewBuilder::new_with_web_context(&mut ctx)
+                                    .with_transparent(false)
+                                    .with_background_color(bg)
+                                    .with_url(tray_url)
+                                    .with_ipc_handler(move |req| {
+                                        dispatch_ipc_cmd(&ipc_proxy_t, req.body());
+                                    });
+                                match attach_custom_protocol(
+                                    builder,
+                                    rt_handle.clone(),
+                                    ipc.clone(),
+                                    updater.clone(),
+                                )
+                                .build(&twin)
+                                {
+                                    Ok(tview) => {
+                                        tray_pair = Some((twin, tview));
+                                        let fallback_t = proxy.clone();
+                                        std::thread::spawn(move || {
+                                            std::thread::sleep(std::time::Duration::from_millis(600));
+                                            let _ = fallback_t.send_event(UiWindowEvent::ReadyTray);
+                                        });
+                                    }
+                                    Err(e) => warn!("No se pudo inicializar WebView del Tray: {}", e),
+                                }
+                            }
+                            Err(e) => warn!("No se pudo crear popup del Tray: {}", e),
+                        }
+                    }
+                }
+                UiWindowEvent::ReadyTray => {
+                    if let Some((ref win, _)) = tray_pair {
+                        if !win.is_visible() {
+                            win.set_visible(true);
+                            win.set_focus();
+                        }
+                    }
+                }
+                UiWindowEvent::CloseTray => {
+                    if let Some((ref win, _)) = tray_pair {
+                        win.set_visible(false);
+                    }
+                }
+                UiWindowEvent::ResizeTray(w, h) => {
+                    let cw = w.clamp(280.0, 340.0);
+                    let ch = h.clamp(240.0, 520.0);
+                    let dh = ch - tray_size.1;
+                    tray_size = (cw, ch);
+                    if let Some((ref win, _)) = tray_pair {
+                        if let Ok(pos) = win.outer_position() {
+                            let sf = win.scale_factor();
+                            let lp = pos.to_logical::<f64>(sf);
+                            if dh.abs() > 1.0 {
+                                win.set_outer_position(LogicalPosition::new(lp.x, (lp.y - dh).max(12.0)));
+                            }
+                        }
+                        win.set_inner_size(LogicalSize::new(cw, ch));
                     }
                 }
             },
