@@ -257,25 +257,53 @@ pub fn apply_egui_visuals(ctx: &egui::Context, pal: &ThemePalette) {
 fn detect_windows_dark_mode() -> bool {
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        let out = std::process::Command::new("reg.exe")
-            .args([
-                "query",
-                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                "/v",
-                "AppsUseLightTheme",
-            ])
-            .creation_flags(0x0800_0000)
-            .output();
-        if let Ok(o) = out {
-            let txt = String::from_utf8_lossy(&o.stdout);
-            if txt.contains("0x1") {
-                return false;
+        use std::sync::{Mutex, OnceLock};
+        use std::time::{Duration, Instant};
+
+        static CACHE: OnceLock<Mutex<Option<(Instant, bool)>>> = OnceLock::new();
+        let lock = CACHE.get_or_init(|| Mutex::new(None));
+        if let Ok(mut g) = lock.lock() {
+            let now = Instant::now();
+            if let Some((ts, cached)) = *g {
+                if now.duration_since(ts) < Duration::from_secs(2) {
+                    return cached;
+                }
             }
-            if txt.contains("0x0") {
-                return true;
-            }
+            let dark = read_windows_apps_dark_mode_reg();
+            *g = Some((now, dark));
+            return dark;
         }
+        return read_windows_apps_dark_mode_reg();
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
+#[cfg(windows)]
+fn read_windows_apps_dark_mode_reg() -> bool {
+    use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+
+    let subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0"
+        .encode_utf16()
+        .collect();
+    let value: Vec<u16> = "AppsUseLightTheme\0".encode_utf16().collect();
+    let mut data: u32 = 0;
+    let mut cb_data: u32 = std::mem::size_of::<u32>() as u32;
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            &mut data as *mut u32 as *mut core::ffi::c_void,
+            &mut cb_data,
+        )
+    };
+    if status == 0 {
+        return data == 0;
     }
     true
 }

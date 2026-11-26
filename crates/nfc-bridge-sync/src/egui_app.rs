@@ -103,6 +103,7 @@ struct SharedUiCore {
     last_dwm_main_key: Option<(bool, Color32)>,
     last_dwm_opts_key: Option<(bool, Color32)>,
     last_dwm_tray_key: Option<(bool, Color32)>,
+    last_visuals_pal: Option<ThemePalette>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -240,6 +241,7 @@ pub fn run_desktop_ui(
         last_dwm_main_key: None,
         last_dwm_opts_key: None,
         last_dwm_tray_key: None,
+        last_visuals_pal: None,
     }));
 
     let native_options = eframe::NativeOptions {
@@ -253,6 +255,8 @@ pub fn run_desktop_ui(
         ..Default::default()
     };
 
+    let tray_events: Arc<Mutex<Vec<TrayIconEvent>>> = Arc::new(Mutex::new(Vec::new()));
+
     let title_owned = app_title.to_string();
     eframe::run_native(
         &title_owned,
@@ -260,20 +264,38 @@ pub fn run_desktop_ui(
         Box::new(move |cc| {
             setup_fonts(&cc.egui_ctx);
             apply_egui_visuals(&cc.egui_ctx, &init_pal);
+            {
+                core.lock().unwrap().last_visuals_pal = Some(init_pal);
+            }
+
+            let ctx_tray = cc.egui_ctx.clone();
+            let q_tray = tray_events.clone();
+            TrayIconEvent::set_event_handler(Some(move |ev| {
+                if let Ok(mut q) = q_tray.lock() {
+                    q.push(ev);
+                }
+                ctx_tray.request_repaint();
+            }));
 
             let ctx_bg = cc.egui_ctx.clone();
             let core_bg = core.clone();
             let ipc_bg = ipc.clone();
             let upd_bg = updater.clone();
             rt_handle.spawn(async move {
+                let mut last_sig = String::new();
                 loop {
-                    tokio::time::sleep(Duration::from_millis(250)).await;
+                    tokio::time::sleep(Duration::from_millis(350)).await;
                     let _ = ipc_bg.send_command(IpcCommand::GetTransportSnapshot).await;
                     let st = ipc_bg.get_live_state().await;
                     upd_bg
                         .set_known_driver_version(st.snapshot.driver_version.clone())
                         .await;
                     let upd = upd_bg.snapshot().await;
+                    let sig = serde_json::to_string(&(&st, &upd)).unwrap_or_default();
+                    let changed = sig != last_sig;
+                    if changed {
+                        last_sig = sig;
+                    }
                     {
                         let mut guard = core_bg.lock().unwrap();
                         let now = Instant::now();
@@ -293,9 +315,6 @@ pub fn run_desktop_ui(
                         }
                         guard.updates = upd;
 
-                        if !guard.net_dirty_until.is_some_and(|t| now < t) {
-                            // No sobrescribir si el input está en foco/edición activa (gestionado en UI)
-                        }
                         if !guard.relay_url_inited {
                             if let Some(ref ru) = guard.live.snapshot.relay_url {
                                 if !ru.is_empty() {
@@ -305,14 +324,16 @@ pub fn run_desktop_ui(
                             }
                         }
                     }
-                    ctx_bg.request_repaint();
+                    if changed {
+                        ctx_bg.request_repaint();
+                    }
                 }
             });
 
             Ok(Box::new(NfcBridgeEguiApp {
                 core,
                 _tray: tray_handle,
-                last_tray_poll: Instant::now(),
+                tray_events,
             }))
         }),
     )
@@ -322,19 +343,28 @@ pub fn run_desktop_ui(
 struct NfcBridgeEguiApp {
     core: Arc<Mutex<SharedUiCore>>,
     _tray: Option<TrayIcon>,
-    last_tray_poll: Instant,
+    tray_events: Arc<Mutex<Vec<TrayIconEvent>>>,
 }
 
 impl eframe::App for NfcBridgeEguiApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         let g = self.core.lock().unwrap();
-        let pal = g.palette();
-        pal.surface.to_normalized_gamma_f32()
+        g.last_visuals_pal
+            .unwrap_or_else(|| g.palette())
+            .surface
+            .to_normalized_gamma_f32()
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 1. Procesar eventos del icono del System Tray (incluso con ventana principal oculta)
-        while let Ok(evt) = TrayIconEvent::receiver().try_recv() {
+        // 1. Procesar eventos del icono del System Tray (despertado instantáneo por event handler)
+        let pending_tray: Vec<TrayIconEvent> = {
+            if let Ok(mut q) = self.tray_events.lock() {
+                std::mem::take(&mut *q)
+            } else {
+                Vec::new()
+            }
+        };
+        for evt in pending_tray {
             if let TrayIconEvent::Click {
                 button,
                 button_state: MouseButtonState::Up,
@@ -378,7 +408,7 @@ impl eframe::App for NfcBridgeEguiApp {
             }
         }
 
-        // 3. Sincronizar estado de foco/visibilidad y tema de ventana principal
+        // 3. Sincronizar estado de foco/visibilidad y tema de ventana principal (solo si cambió)
         let (
             want_focus_main,
             main_title,
@@ -390,10 +420,14 @@ impl eframe::App for NfcBridgeEguiApp {
             tray_h,
             should_quit,
             needs_dwm_main,
+            needs_visuals,
         ) = {
             let mut g = self.core.lock().unwrap();
             let pal = g.palette();
-            apply_egui_visuals(ctx, &pal);
+            let need_vis = g.last_visuals_pal != Some(pal);
+            if need_vis {
+                g.last_visuals_pal = Some(pal);
+            }
 
             let dwm_key = (pal.is_dark, pal.outline);
             let need_dwm = g.last_dwm_main_key != Some(dwm_key);
@@ -418,8 +452,13 @@ impl eframe::App for NfcBridgeEguiApp {
                 th,
                 g.should_quit,
                 need_dwm,
+                need_vis,
             )
         };
+
+        if needs_visuals {
+            apply_egui_visuals(ctx, &pal);
+        }
 
         if should_quit {
             ctx.send_viewport_cmd(ViewportCommand::Close);
@@ -434,6 +473,16 @@ impl eframe::App for NfcBridgeEguiApp {
 
         if needs_dwm_main {
             apply_win32_dwm_to_title(&main_title, &pal);
+        }
+
+        if !options_open || !tray_open {
+            let mut g = self.core.lock().unwrap();
+            if !options_open {
+                g.last_dwm_opts_key = None;
+            }
+            if !tray_open {
+                g.last_dwm_tray_key = None;
+            }
         }
 
         // 4. Ventana independiente de Opciones (Deferred Viewport)
@@ -483,11 +532,6 @@ impl eframe::App for NfcBridgeEguiApp {
             ctx.show_viewport_deferred(tray_id, vb, move |ui, _class| {
                 render_tray_viewport(&core_tray, &tray_title, ui);
             });
-        }
-
-        if self.last_tray_poll.elapsed() > Duration::from_millis(120) {
-            self.last_tray_poll = Instant::now();
-            ctx.request_repaint_after(Duration::from_millis(200));
         }
     }
 
