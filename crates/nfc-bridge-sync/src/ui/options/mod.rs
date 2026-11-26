@@ -50,7 +50,11 @@ pub(crate) fn render_options_viewport(
 ) {
     let ctx = ui.ctx().clone();
     if ctx.input(|i| i.viewport().close_requested()) {
-        core.lock().unwrap().options_open = false;
+        let mut g = core.lock().unwrap();
+        g.options_open = false;
+        g.options_painted = false;
+        g.options_target_pos = None;
+        drop(g);
         ctx.request_repaint_of(ViewportId::ROOT);
     }
 
@@ -136,7 +140,11 @@ pub(crate) fn render_options_viewport(
                 ctx.send_viewport_cmd(ViewportCommand::Minimized(true));
             }
             if close_resp.clicked() {
-                core.lock().unwrap().options_open = false;
+                let mut g = core.lock().unwrap();
+                g.options_open = false;
+                g.options_painted = false;
+                g.options_target_pos = None;
+                drop(g);
                 ctx.send_viewport_cmd(ViewportCommand::Close);
                 ctx.request_repaint_of(ViewportId::ROOT);
             }
@@ -312,6 +320,20 @@ pub(crate) fn render_options_viewport(
             None
         }
     };
+    let first_paint_target = {
+        let mut g = core.lock().unwrap();
+        if !g.options_painted {
+            g.options_painted = true;
+            g.options_target_pos
+        } else {
+            None
+        }
+    };
+    if let Some(tp) = first_paint_target {
+        ctx.send_viewport_cmd(ViewportCommand::OuterPosition(tp));
+        ctx.send_viewport_cmd(ViewportCommand::Focus);
+        ctx.request_repaint_of(ViewportId::ROOT);
+    }
     if let Some((pal_after, main_title, opt_open, tray_open)) = pal_change {
         apply_egui_visuals(&ctx, &pal_after);
         apply_win32_dwm_to_title(opt_title, &pal_after);

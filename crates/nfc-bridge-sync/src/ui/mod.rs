@@ -86,6 +86,8 @@ pub fn run_desktop_ui(
         options_open: false,
         options_just_opened: false,
         options_want_focus: false,
+        options_painted: false,
+        options_target_pos: None,
         tray_open: false,
         tray_want_focus: false,
         tray_saw_focus: false,
@@ -363,9 +365,14 @@ impl eframe::App for NfcBridgeEguiApp {
 
         let (
             want_focus_main,
+            main_visible,
             main_title,
             pal,
             options_open,
+            options_just_opened,
+            options_want_focus,
+            options_painted,
+            mut options_target_pos,
             tray_open,
             tray_want_focus,
             tray_pos,
@@ -394,15 +401,26 @@ impl eframe::App for NfcBridgeEguiApp {
             let wf = g.main_want_focus;
             g.main_want_focus = false;
 
+            let ojo = g.options_just_opened;
+            g.options_just_opened = false;
+
+            let owf = g.options_want_focus;
+            g.options_want_focus = false;
+
             let twf = g.tray_want_focus;
             g.tray_want_focus = false;
 
             let th = estimate_tray_height(&g);
             (
                 wf,
+                g.main_visible,
                 g.app_title.clone(),
                 pal,
                 g.options_open,
+                ojo,
+                owf,
+                g.options_painted,
+                g.options_target_pos,
                 g.tray_open,
                 twf,
                 g.tray_pos,
@@ -437,9 +455,66 @@ impl eframe::App for NfcBridgeEguiApp {
             let mut g = self.core.lock().unwrap();
             if !options_open {
                 g.last_dwm_opts_key = None;
+                g.options_painted = false;
+                g.options_target_pos = None;
             }
             if !tray_open {
                 g.last_dwm_tray_key = None;
+            }
+        }
+
+        if options_open {
+            let opt_id = ViewportId::from_hash_of("nb_options_viewport");
+            let opt_title = format!("{} - Options", main_title);
+            if options_just_opened || options_target_pos.is_none() {
+                let tp = if main_visible {
+                    if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
+                        if outer.min.x > -10000.0 && outer.min.y > -10000.0 && outer.width() > 200.0 {
+                            Pos2::new(
+                                (outer.center().x - 340.0).max(20.0),
+                                (outer.center().y - 234.0).max(20.0),
+                            )
+                        } else {
+                            Pos2::new(240.0, 140.0)
+                        }
+                    } else {
+                        Pos2::new(240.0, 140.0)
+                    }
+                } else if let Some(mon) = ctx.input(|i| i.viewport().monitor_size) {
+                    Pos2::new(
+                        ((mon.x - 680.0) * 0.5).max(20.0),
+                        ((mon.y - 468.0) * 0.5).max(20.0),
+                    )
+                } else {
+                    Pos2::new(240.0, 140.0)
+                };
+                self.core.lock().unwrap().options_target_pos = Some(tp);
+                options_target_pos = Some(tp);
+            }
+            let mut vb = ViewportBuilder::default()
+                .with_title(opt_title.clone())
+                .with_inner_size([680.0, 468.0])
+                .with_decorations(false)
+                .with_resizable(false)
+                .with_transparent(false);
+            if !options_painted {
+                // Crear el HWND fuera de pantalla hasta que complete su primer swap_buffers
+                // para evitar el destello negro inicial al abrir Opciones.
+                vb = vb.with_position(Pos2::new(-32000.0, -32000.0));
+            } else if let Some(tp) = options_target_pos {
+                vb = vb.with_position(tp);
+            }
+            let core_opt = self.core.clone();
+            ctx.show_viewport_deferred(opt_id, vb, move |ui, _class| {
+                render_options_viewport(&core_opt, &opt_title, ui);
+            });
+            if !options_painted {
+                ctx.request_repaint_of(opt_id);
+            } else if options_want_focus {
+                ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Visible(true));
+                ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Minimized(false));
+                ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Focus);
+                ctx.request_repaint_of(opt_id);
             }
         }
 
@@ -475,39 +550,5 @@ impl eframe::App for NfcBridgeEguiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         render_main_viewport(&self.core, &ctx, ui);
-
-        let (options_open, options_just_opened, options_want_focus, main_title) = {
-            let mut g = self.core.lock().unwrap();
-            let ojo = g.options_just_opened;
-            g.options_just_opened = false;
-            let owf = g.options_want_focus;
-            g.options_want_focus = false;
-            (g.options_open, ojo, owf, g.app_title.clone())
-        };
-
-        if options_open {
-            let opt_id = ViewportId::from_hash_of("nb_options_viewport");
-            let opt_title = format!("{} - Options", main_title);
-            let mut vb = ViewportBuilder::default()
-                .with_title(opt_title.clone())
-                .with_inner_size([680.0, 468.0])
-                .with_decorations(false)
-                .with_resizable(false)
-                .with_transparent(false);
-            if options_just_opened {
-                if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
-                    let x = outer.center().x - 340.0;
-                    let y = outer.center().y - 234.0;
-                    vb = vb.with_position(Pos2::new(x.max(20.0), y.max(20.0)));
-                }
-            }
-            if options_want_focus {
-                ctx.send_viewport_cmd_to(opt_id, ViewportCommand::Focus);
-            }
-            let core_opt = &self.core;
-            ctx.show_viewport_immediate(opt_id, vb, |ui, _class| {
-                render_options_viewport(core_opt, &opt_title, ui);
-            });
-        }
     }
 }

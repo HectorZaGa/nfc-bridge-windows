@@ -40,7 +40,7 @@ pub(crate) fn render_opt_updates(
         let drv_m = translate_upd_msg(&g, false, &u);
         (
             g.t("settings_updates_header").to_uppercase(),
-            g.t(if is_chk {
+            g.t(if spin_on {
                 "settings_checking_updates"
             } else {
                 "settings_check_updates"
@@ -98,15 +98,28 @@ pub(crate) fn render_opt_updates(
                 Stroke::new(1.0, pal.accent),
             );
         }
-        if resp.clicked() {
+        if resp.clicked() && !spin_active {
             let mut g = core.lock().unwrap();
             g.upd_spin_until = Some(Instant::now() + Duration::from_millis(650));
+            if g.updates.app_status != "downloading" && g.updates.app_status != "installed_restart" {
+                g.updates.app_status = "checking".to_string();
+            }
+            if g.updates.driver_status != "downloading" && g.updates.driver_status != "installed" {
+                g.updates.driver_status = "checking".to_string();
+            }
             let u_bg = g.updater.clone();
             let dv = g.live.snapshot.driver_version.clone();
             let aa = g.live.ui_settings.auto_update_app;
             let ad = g.live.ui_settings.auto_update_driver;
+            let core_c = core.clone();
+            let ctx_c = ui.ctx().clone();
             g.rt.spawn(async move {
                 u_bg.check_all(dv, aa, ad).await;
+                let snap = u_bg.snapshot().await;
+                if let Ok(mut guard) = core_c.lock() {
+                    guard.updates = snap;
+                    super::super::repaint_active_from_guard(&ctx_c, &guard);
+                }
             });
         }
     });

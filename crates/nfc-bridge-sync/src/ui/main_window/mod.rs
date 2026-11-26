@@ -172,8 +172,13 @@ pub(crate) fn render_main_viewport(
 
             if opt_resp.clicked() {
                 let mut g = core.lock().unwrap();
+                let was_open = g.options_open;
                 g.options_open = true;
-                g.options_just_opened = true;
+                if !was_open {
+                    g.options_just_opened = true;
+                    g.options_painted = false;
+                    g.options_target_pos = None;
+                }
                 g.options_want_focus = true;
             }
             if min_resp.clicked() {

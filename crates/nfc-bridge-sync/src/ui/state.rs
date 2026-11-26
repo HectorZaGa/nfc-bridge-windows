@@ -38,6 +38,8 @@ pub(crate) struct SharedUiCore {
     pub(crate) options_open: bool,
     pub(crate) options_just_opened: bool,
     pub(crate) options_want_focus: bool,
+    pub(crate) options_painted: bool,
+    pub(crate) options_target_pos: Option<Pos2>,
     pub(crate) tray_open: bool,
     pub(crate) tray_want_focus: bool,
     pub(crate) tray_saw_focus: bool,

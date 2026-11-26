@@ -382,8 +382,13 @@ pub(crate) fn render_tray_viewport(
                 let mut g = core.lock().unwrap();
                 g.tray_open = false;
                 g.tray_closed_at = Some(std::time::Instant::now());
+                let was_open = g.options_open;
                 g.options_open = true;
-                g.options_just_opened = true;
+                if !was_open {
+                    g.options_just_opened = true;
+                    g.options_painted = false;
+                    g.options_target_pos = None;
+                }
                 g.options_want_focus = true;
                 drop(g);
                 ctx.request_repaint_of(egui::ViewportId::ROOT);
