@@ -37,16 +37,23 @@ pub(crate) fn render_tray_viewport(
     let focused = ctx.input(|i| i.viewport().focused);
     let esc_pressed = ctx.input(|i| i.key_pressed(egui::Key::Escape));
     let close_req = ctx.input(|i| i.viewport().close_requested());
+    let pointer_inside = ctx.input(|i| i.pointer.hover_pos().is_some());
     let mut closing_now = false;
+    let mut poll_unfocused = false;
     {
         let mut g = core.lock().unwrap();
         if focused == Some(true) {
             g.tray_saw_focus = true;
         }
-        let lost_focus = focused == Some(false)
-            && (g.tray_saw_focus
-                || g.tray_opened_at
-                    .is_some_and(|t| t.elapsed() > Duration::from_millis(250)));
+        let past_grace = g
+            .tray_opened_at
+            .is_some_and(|t| t.elapsed() > Duration::from_millis(280));
+        let lost_focus = if g.tray_saw_focus {
+            focused == Some(false) && !pointer_inside
+        } else {
+            poll_unfocused = !pointer_inside;
+            !pointer_inside && past_grace && outside_mouse_clicked_win32()
+        };
         if lost_focus || esc_pressed || close_req || g.should_quit {
             g.tray_open = false;
             g.tray_closed_at = Some(std::time::Instant::now());
@@ -55,6 +62,8 @@ pub(crate) fn render_tray_viewport(
     }
     if closing_now {
         ctx.request_repaint_of(egui::ViewportId::ROOT);
+    } else if poll_unfocused {
+        ctx.request_repaint_after(Duration::from_millis(90));
     }
 
     let (
@@ -506,4 +515,22 @@ fn tray_menu_item(
         );
     }
     resp.clicked()
+}
+
+fn outside_mouse_clicked_win32() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            GetAsyncKeyState, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON,
+        };
+        unsafe {
+            (GetAsyncKeyState(VK_LBUTTON as i32) as u16 & 0x8000) != 0
+                || (GetAsyncKeyState(VK_RBUTTON as i32) as u16 & 0x8000) != 0
+                || (GetAsyncKeyState(VK_MBUTTON as i32) as u16 & 0x8000) != 0
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
 }

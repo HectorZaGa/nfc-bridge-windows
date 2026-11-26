@@ -31,6 +31,11 @@ pub(crate) fn render_opt_updates(
         restart_lbl,
         app_msg,
         drv_msg,
+        driver_installed,
+        driver_online,
+        missing_badge,
+        stopped_badge,
+        start_drv_lbl,
     ) = {
         let g = core.lock().unwrap();
         let u = g.updates.clone();
@@ -60,6 +65,11 @@ pub(crate) fn render_opt_updates(
             g.t("settings_btn_restart_now").to_string(),
             app_m,
             drv_m,
+            g.live.driver_installed,
+            g.live.driver_online,
+            g.t("driver_badge_missing").to_string(),
+            g.t("driver_badge_stopped").to_string(),
+            g.t("settings_btn_start_driver").to_string(),
         )
     };
 
@@ -108,7 +118,11 @@ pub(crate) fn render_opt_updates(
                 g.updates.driver_status = "checking".to_string();
             }
             let u_bg = g.updater.clone();
-            let dv = g.live.snapshot.driver_version.clone();
+            let dv = if g.live.driver_installed {
+                g.live.snapshot.driver_version.clone()
+            } else {
+                None
+            };
             let aa = g.live.ui_settings.auto_update_app;
             let ad = g.live.ui_settings.auto_update_driver;
             let core_c = core.clone();
@@ -222,11 +236,16 @@ pub(crate) fn render_opt_updates(
                         .color(pal.on_surface),
                 );
                 ui.add_space(6.0);
-                let dv_str = upd
-                    .driver_version
-                    .as_deref()
-                    .map(|v| format!("v{}", v))
-                    .unwrap_or_else(|| "--".to_string());
+                let dv_str = if !driver_installed {
+                    missing_badge.clone()
+                } else if !driver_online {
+                    stopped_badge.clone()
+                } else {
+                    upd.driver_version
+                        .as_deref()
+                        .map(|v| format!("v{}", v))
+                        .unwrap_or_else(|| "--".to_string())
+                };
                 paint_inline_capsule(ui, &dv_str, true, pal);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if switch_pill_btn(
@@ -249,26 +268,58 @@ pub(crate) fn render_opt_updates(
             ui.label(
                 RichText::new(drv_msg)
                     .size(11.0)
-                    .color(if upd.driver_status == "available" {
+                    .color(if !driver_installed {
+                        pal.red_disconnect
+                    } else if upd.driver_status == "available" || !driver_online {
                         pal.accent
                     } else {
                         pal.on_surface_muted
                     }),
             );
 
-            if upd.driver_status == "available" || upd.driver_status == "downloading" {
+            if upd.driver_status == "downloading"
+                || upd.driver_status == "available"
+                || !driver_installed
+                || !driver_online
+            {
                 ui.add_space(6.0);
-                let lbl = if upd.driver_status == "downloading" {
-                    &dl_ing_lbl
+                let start_driver_action = driver_installed && !driver_online;
+                let install_or_upd_action =
+                    !driver_installed || upd.driver_status == "available";
+                let core_c = core.clone();
+                let ctx_c = ui.ctx().clone();
+                if upd.driver_status == "downloading" {
+                    let _ = small_accent_btn(ui, pal, &dl_ing_lbl, 148.0, 28.0);
                 } else {
-                    &inst_drv_lbl
-                };
-                if small_accent_btn(ui, pal, lbl, 148.0, 28.0) && upd.driver_status != "downloading"
-                {
-                    let g = core.lock().unwrap();
-                    let u_bg = g.updater.clone();
-                    g.rt.spawn(async move {
-                        let _ = u_bg.install_driver_update().await;
+                    ui.horizontal(|ui| {
+                        if start_driver_action && small_accent_btn(ui, pal, &start_drv_lbl, 148.0, 28.0)
+                        {
+                            let ctx_s = ctx_c.clone();
+                            std::thread::spawn(move || {
+                                let _ = crate::driver_manager::DriverManager::new()
+                                    .try_start_driver_service();
+                                ctx_s.request_repaint();
+                            });
+                        }
+                        if install_or_upd_action {
+                            let lbl = if !driver_installed {
+                                &inst_drv_lbl
+                            } else {
+                                &dl_lbl
+                            };
+                            if small_accent_btn(ui, pal, lbl, 152.0, 28.0) {
+                                let g = core.lock().unwrap();
+                                let u_bg = g.updater.clone();
+                                g.rt.spawn(async move {
+                                    let _ = u_bg.install_or_update_driver(true).await;
+                                    let snap = u_bg.snapshot().await;
+                                    if let Ok(mut guard) = core_c.lock() {
+                                        guard.updates = snap;
+                                        super::super::repaint_active_from_guard(&ctx_c, &guard);
+                                    }
+                                });
+                            }
+                        }
                     });
                 }
             }
@@ -297,9 +348,17 @@ fn translate_upd_msg(g: &SharedUiCore, is_app: bool, u: &UpdatesOverviewState) -
     };
     match status.as_str() {
         "checking" => g.t("upd_checking").to_string(),
-        "up_to_date" => cur
-            .map(|v| g.t_vars("upd_uptodate", &[("ver", &v)]))
-            .unwrap_or_else(|| g.t("upd_idle").to_string()),
+        "not_installed" => g.t("upd_driver_not_installed").to_string(),
+        "up_to_date" => {
+            if !is_app && !g.live.driver_installed {
+                g.t("upd_driver_not_installed").to_string()
+            } else if !is_app && !g.live.driver_online {
+                g.t("device_driver_start_hint").to_string()
+            } else {
+                cur.map(|v| g.t_vars("upd_uptodate", &[("ver", &v)]))
+                    .unwrap_or_else(|| g.t("upd_idle").to_string())
+            }
+        }
         "available" => {
             if let Some(a) = avail {
                 g.t_vars(
@@ -334,6 +393,14 @@ fn translate_upd_msg(g: &SharedUiCore, is_app: bool, u: &UpdatesOverviewState) -
                 g.t("upd_no_releases_driver").to_string()
             }
         }
-        _ => g.t("upd_idle").to_string(),
+        _ => {
+            if !is_app && !g.live.driver_installed {
+                g.t("upd_driver_not_installed").to_string()
+            } else if !is_app && !g.live.driver_online {
+                g.t("device_driver_start_hint").to_string()
+            } else {
+                g.t("upd_idle").to_string()
+            }
+        }
     }
 }

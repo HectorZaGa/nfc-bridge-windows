@@ -97,6 +97,17 @@ impl DriverManager {
         }
     }
 
+    /// Intenta iniciar el servicio `NfcBridgeDriver` si está instalado y detenido.
+    pub fn try_start_driver_service(&self) -> bool {
+        if self.check_driver_status() != DriverStatus::InstalledStopped {
+            return false;
+        }
+        hidden_command("sc.exe")
+            .args(["start", "NfcBridgeDriver"])
+            .status()
+            .is_ok_and(|s| s.success())
+    }
+
     pub async fn fetch_latest_release(&self) -> Result<GitHubRelease> {
         let url = format!(
             "https://api.github.com/repos/{}/{}/releases/latest",

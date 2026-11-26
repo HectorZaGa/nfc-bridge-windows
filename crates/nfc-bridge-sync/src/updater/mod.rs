@@ -18,7 +18,6 @@ use version::find_best_release_match;
 use crate::driver_manager::{DriverManager, DriverStatus};
 use crate::platform::launch_elevated_or_normal;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
@@ -30,7 +29,6 @@ pub const DRIVER_REPO: &str = "HectorZaGa/nfc-bridge-driver";
 pub struct DesktopUpdater {
     client: reqwest::Client,
     state: Arc<RwLock<UpdatesOverviewState>>,
-    driver_install_prompted: Arc<AtomicBool>,
 }
 
 impl Default for DesktopUpdater {
@@ -49,7 +47,6 @@ impl DesktopUpdater {
         Self {
             client,
             state: Arc::new(RwLock::new(UpdatesOverviewState::for_current_binary())),
-            driver_install_prompted: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -161,30 +158,45 @@ impl DesktopUpdater {
                         st.driver_message = msg;
                         st.driver_available = Some(matched);
                     }
-                    if drv_missing {
-                        if !self.driver_install_prompted.swap(true, Ordering::SeqCst) {
-                            let _ = self.install_driver_internal(!auto_update_driver).await;
-                        }
-                    } else if auto_update_driver {
+                    if !drv_missing && auto_update_driver {
                         let _ = self.install_driver_internal(false).await;
                     }
                 } else {
                     let mut st = self.state.write().await;
-                    st.driver_status = "up_to_date".to_string();
-                    st.driver_message = format!("Actualizado (v{})", normalize_base_version(&local_drv));
+                    if drv_missing {
+                        st.driver_status = "not_installed".to_string();
+                        st.driver_message =
+                            "NFC Bridge Driver no está instalado en este equipo.".to_string();
+                    } else {
+                        st.driver_status = "up_to_date".to_string();
+                        st.driver_message =
+                            format!("Actualizado (v{})", normalize_base_version(&local_drv));
+                    }
                     st.driver_available = None;
                 }
             }
             Ok(None) => {
                 let mut st = self.state.write().await;
-                st.driver_status = "no_releases".to_string();
-                st.driver_message = "Sin lanzamientos publicados aún en GitHub".to_string();
+                if drv_missing {
+                    st.driver_status = "not_installed".to_string();
+                    st.driver_message =
+                        "NFC Bridge Driver no está instalado en este equipo.".to_string();
+                } else {
+                    st.driver_status = "no_releases".to_string();
+                    st.driver_message = "Sin lanzamientos publicados aún en GitHub".to_string();
+                }
                 st.driver_available = None;
             }
             Err(e) => {
                 let mut st = self.state.write().await;
-                st.driver_status = "error".to_string();
-                st.driver_message = format!("No se pudo verificar: {}", e);
+                if drv_missing {
+                    st.driver_status = "not_installed".to_string();
+                    st.driver_message =
+                        "NFC Bridge Driver no está instalado en este equipo.".to_string();
+                } else {
+                    st.driver_status = "error".to_string();
+                    st.driver_message = format!("No se pudo verificar: {}", e);
+                }
             }
         }
     }
@@ -324,7 +336,28 @@ impl DesktopUpdater {
     }
 
     pub async fn install_driver_update(&self) -> Result<()> {
-        self.install_driver_internal(false).await
+        self.install_or_update_driver(true).await
+    }
+
+    pub async fn install_or_update_driver(&self, interactive: bool) -> Result<()> {
+        let has_avail = self.state.read().await.driver_available.is_some();
+        if !has_avail {
+            if let Ok(Some(matched)) = self
+                .fetch_matching_release(DRIVER_REPO, "nfc-bridge-driver-", false)
+                .await
+            {
+                let mut st = self.state.write().await;
+                st.driver_available = Some(matched);
+            } else {
+                let mut st = self.state.write().await;
+                st.driver_status = "no_releases".to_string();
+                st.driver_message =
+                    "No se encontró un instalador compatible publicado en GitHub Releases."
+                        .to_string();
+                anyhow::bail!("Sin instalador de driver disponible en GitHub Releases");
+            }
+        }
+        self.install_driver_internal(interactive).await
     }
 
     async fn install_driver_internal(&self, interactive: bool) -> Result<()> {

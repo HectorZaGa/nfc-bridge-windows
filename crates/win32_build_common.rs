@@ -208,9 +208,14 @@ END
         return;
     }
 
+    let res_format = if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        "res"
+    } else {
+        "coff"
+    };
     let ok = Command::new("windres")
         .current_dir(&out_dir)
-        .args(["app.rc", "-O", "coff", "-o", "app.res"])
+        .args(["app.rc", "-O", res_format, "-o", "app.res"])
         .status()
         .is_ok_and(|s| s.success());
     if ok && res_path.exists() {

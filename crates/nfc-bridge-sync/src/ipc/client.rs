@@ -3,11 +3,11 @@ use super::models::{
     IssuedQrData, PendingMobileSwitchState, SyncUiSettings, TransportSnapshotData,
 };
 use super::uri::{build_wifi_direct_qr_uri, normalize_hex_color};
-use crate::driver_manager::DRIVER_NAMED_PIPE;
+use crate::driver_manager::{DriverManager, DriverStatus, DRIVER_NAMED_PIPE};
 use crate::platform::read_windows_accent_hex;
 use anyhow::Result;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot, Mutex, Notify, RwLock};
 use tracing::{info, warn};
@@ -28,8 +28,13 @@ impl Default for DriverIpcClient {
 
 impl DriverIpcClient {
     pub fn new() -> Self {
+        let init_state = DesktopLiveState {
+            driver_installed: DriverManager::new().check_driver_status()
+                != DriverStatus::NotInstalled,
+            ..Default::default()
+        };
         Self {
-            state: Arc::new(RwLock::new(DesktopLiveState::default())),
+            state: Arc::new(RwLock::new(init_state)),
             cmd_tx: Arc::new(Mutex::new(None)),
             pending_qr_waiter: Arc::new(Mutex::new(None)),
             state_notify: Arc::new(Notify::new()),
@@ -237,11 +242,13 @@ impl DriverIpcClient {
     /// Mantiene conexión IPC persistente con `nfc-bridge-driver`.
     pub async fn run_forever(&self) -> Result<()> {
         let mut logged_waiting = false;
+        let mut last_auto_start: Option<Instant> = None;
 
         loop {
             match self.connect_and_stream().await {
                 Ok(()) => {
                     logged_waiting = false;
+                    last_auto_start = None;
                     warn!("Conexión IPC con el driver cerrada. Reintentando enlace...");
                 }
                 Err(_) => {
@@ -258,10 +265,26 @@ impl DriverIpcClient {
                 let mut guard = self.cmd_tx.lock().await;
                 *guard = None;
             }
+            let drv_mgr = DriverManager::new();
+            let drv_status = drv_mgr.check_driver_status();
+            let is_installed = drv_status != DriverStatus::NotInstalled;
             {
                 let mut st = self.state.write().await;
                 st.driver_online = false;
+                st.driver_installed = is_installed;
                 st.connected = false;
+            }
+            self.state_notify.notify_one();
+
+            if drv_status == DriverStatus::InstalledStopped
+                && last_auto_start.is_none_or(|t| t.elapsed() >= Duration::from_secs(8))
+            {
+                last_auto_start = Some(Instant::now());
+                info!("Servicio NfcBridgeDriver detenido; iniciándolo automáticamente...");
+                if drv_mgr.try_start_driver_service() {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    continue;
+                }
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
@@ -278,6 +301,7 @@ impl DriverIpcClient {
             {
                 let mut st = self.state.write().await;
                 st.driver_online = true;
+                st.driver_installed = true;
             }
 
             let (tx, mut rx) = mpsc::channel::<IpcCommand>(32);

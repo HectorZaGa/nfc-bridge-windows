@@ -1,7 +1,7 @@
 use super::super::icons::{glyph, paint_chevron_y, paint_device_os_icon, paint_glyph, semibold};
-use super::super::state::SharedUiCore;
+use super::super::state::{OptionsTab, SharedUiCore};
 use super::super::theme::ThemePalette;
-use super::super::widgets::paint_divider;
+use super::super::widgets::{paint_divider, small_accent_btn};
 use crate::ipc::IpcCommand;
 use egui::{
     Align, Color32, CornerRadius, FontId, Layout, Margin, Pos2, Rect, RichText, Sense, Stroke,
@@ -30,7 +30,9 @@ pub(crate) fn render_left_column(
         is_connected,
         is_paused,
         pause_lbl,
+        install_drv_lbl,
         driver_online,
+        driver_installed,
         lang,
     ) = {
         let g = core.lock().unwrap();
@@ -63,13 +65,23 @@ pub(crate) fn render_left_column(
             .or_else(|| snap.trusted_devices.first());
 
         let (d_name, d_os, d_meta, l_col, tr_ic) = if !st.driver_online {
-            (
-                g.t("device_driver_stopped").to_string(),
-                "android".to_string(),
-                g.t("device_driver_start_hint").to_string(),
-                pal.red_disconnect,
-                None,
-            )
+            if !st.driver_installed {
+                (
+                    g.t("device_driver_not_installed").to_string(),
+                    "android".to_string(),
+                    g.t("device_driver_install_hint").to_string(),
+                    pal.red_disconnect,
+                    None,
+                )
+            } else {
+                (
+                    g.t("device_driver_stopped").to_string(),
+                    "android".to_string(),
+                    g.t("device_driver_start_hint").to_string(),
+                    pal.amber_pause,
+                    None,
+                )
+            }
         } else if st.connected {
             let os = st.device_os.clone().unwrap_or_else(|| "android".to_string());
             let name = st.device_name.clone().unwrap_or_else(|| {
@@ -127,7 +139,9 @@ pub(crate) fn render_left_column(
             st.connected,
             st.paused,
             g.t(if st.paused { "btn_resume" } else { "btn_pause" }).to_string(),
+            g.t("btn_go_install_driver").to_string(),
             st.driver_online,
+            st.driver_installed,
             g.current_lang().to_string(),
         )
     };
@@ -282,105 +296,121 @@ pub(crate) fn render_left_column(
 
                 ui.add_space(6.0);
 
-                let (p_rect, p_resp) = ui.allocate_exact_size(
-                    Vec2::new(pause_btn_w, 32.0),
-                    if is_connected {
-                        Sense::click()
-                    } else {
-                        Sense::hover()
-                    },
-                );
-                let (p_bg, p_stroke, p_fg, p_ic) = if !is_connected {
-                    (
-                        pal.surface_elevated.gamma_multiply(0.35),
-                        pal.outline.gamma_multiply(0.35),
-                        pal.on_surface.gamma_multiply(0.35),
-                        glyph::PAUSE,
-                    )
-                } else if is_paused {
-                    (
-                        pal.amber_soft,
-                        pal.amber_pause,
-                        pal.on_amber_soft,
-                        glyph::PLAY_ARROW,
-                    )
+                if !driver_online && !driver_installed {
+                    let action_w = (pause_btn_w + 6.0 + 32.0).max(112.0);
+                    if small_accent_btn(ui, pal, &install_drv_lbl, action_w, 32.0) {
+                        let mut g = core.lock().unwrap();
+                        let was_open = g.options_open;
+                        g.options_tab = OptionsTab::Updates;
+                        g.options_open = true;
+                        if !was_open {
+                            g.options_just_opened = true;
+                            g.options_painted = false;
+                            g.options_target_pos = None;
+                        }
+                        g.options_want_focus = true;
+                    }
                 } else {
-                    (
-                        if p_resp.hovered() {
-                            pal.outline
+                    let (p_rect, p_resp) = ui.allocate_exact_size(
+                        Vec2::new(pause_btn_w, 32.0),
+                        if is_connected {
+                            Sense::click()
                         } else {
-                            pal.surface_elevated
+                            Sense::hover()
                         },
-                        pal.outline,
-                        pal.on_surface,
-                        glyph::PAUSE,
-                    )
-                };
-                ui.painter().rect(
-                    p_rect,
-                    CornerRadius::same(8),
-                    p_bg,
-                    Stroke::new(1.0, p_stroke),
-                    StrokeKind::Inside,
-                );
-                let p_ic_col = if is_connected && is_paused {
-                    pal.amber_pause
-                } else if is_connected {
-                    pal.on_surface_muted
-                } else {
-                    pal.on_surface_muted.gamma_multiply(0.35)
-                };
-                paint_glyph(
-                    ui.painter(),
-                    Pos2::new(p_rect.left() + 14.0, p_rect.center().y),
-                    p_ic,
-                    16.0,
-                    p_ic_col,
-                );
-                ui.painter().text(
-                    Pos2::new(p_rect.left() + 26.0, p_rect.center().y),
-                    egui::Align2::LEFT_CENTER,
-                    pause_lbl,
-                    FontId::proportional(12.0),
-                    p_fg,
-                );
-                if is_connected && p_resp.clicked() {
-                    core.lock()
-                        .unwrap()
-                        .send_ipc(IpcCommand::SetPaused { paused: !is_paused });
-                }
-
-                ui.add_space(6.0);
-
-                let (d_rect, d_resp) = ui.allocate_exact_size(
-                    Vec2::splat(32.0),
-                    if is_connected {
-                        Sense::click()
+                    );
+                    let (p_bg, p_stroke, p_fg, p_ic) = if !is_connected {
+                        (
+                            pal.surface_elevated.gamma_multiply(0.35),
+                            pal.outline.gamma_multiply(0.35),
+                            pal.on_surface.gamma_multiply(0.35),
+                            glyph::PAUSE,
+                        )
+                    } else if is_paused {
+                        (
+                            pal.amber_soft,
+                            pal.amber_pause,
+                            pal.on_amber_soft,
+                            glyph::PLAY_ARROW,
+                        )
                     } else {
-                        Sense::hover()
-                    },
-                );
-                let d_alpha = if is_connected { 1.0 } else { 0.35 };
-                ui.painter().rect(
-                    d_rect,
-                    CornerRadius::same(8),
-                    if is_connected && d_resp.hovered() {
-                        pal.red_soft
+                        (
+                            if p_resp.hovered() {
+                                pal.outline
+                            } else {
+                                pal.surface_elevated
+                            },
+                            pal.outline,
+                            pal.on_surface,
+                            glyph::PAUSE,
+                        )
+                    };
+                    ui.painter().rect(
+                        p_rect,
+                        CornerRadius::same(8),
+                        p_bg,
+                        Stroke::new(1.0, p_stroke),
+                        StrokeKind::Inside,
+                    );
+                    let p_ic_col = if is_connected && is_paused {
+                        pal.amber_pause
+                    } else if is_connected {
+                        pal.on_surface_muted
                     } else {
-                        Color32::TRANSPARENT
-                    },
-                    Stroke::new(1.0, pal.red_border.gamma_multiply(d_alpha)),
-                    StrokeKind::Inside,
-                );
-                paint_glyph(
-                    ui.painter(),
-                    d_rect.center(),
-                    glyph::LINK_OFF,
-                    16.0,
-                    pal.red_disconnect.gamma_multiply(d_alpha),
-                );
-                if is_connected && d_resp.clicked() {
-                    core.lock().unwrap().send_ipc(IpcCommand::DisconnectDevice);
+                        pal.on_surface_muted.gamma_multiply(0.35)
+                    };
+                    paint_glyph(
+                        ui.painter(),
+                        Pos2::new(p_rect.left() + 14.0, p_rect.center().y),
+                        p_ic,
+                        16.0,
+                        p_ic_col,
+                    );
+                    ui.painter().text(
+                        Pos2::new(p_rect.left() + 26.0, p_rect.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        pause_lbl,
+                        FontId::proportional(12.0),
+                        p_fg,
+                    );
+                    if is_connected && p_resp.clicked() {
+                        core.lock()
+                            .unwrap()
+                            .send_ipc(IpcCommand::SetPaused { paused: !is_paused });
+                    }
+
+                    ui.add_space(6.0);
+
+                    let (d_rect, d_resp) = ui.allocate_exact_size(
+                        Vec2::splat(32.0),
+                        if is_connected {
+                            Sense::click()
+                        } else {
+                            Sense::hover()
+                        },
+                    );
+                    let d_alpha = if is_connected { 1.0 } else { 0.35 };
+                    ui.painter().rect(
+                        d_rect,
+                        CornerRadius::same(8),
+                        if is_connected && d_resp.hovered() {
+                            pal.red_soft
+                        } else {
+                            Color32::TRANSPARENT
+                        },
+                        Stroke::new(1.0, pal.red_border.gamma_multiply(d_alpha)),
+                        StrokeKind::Inside,
+                    );
+                    paint_glyph(
+                        ui.painter(),
+                        d_rect.center(),
+                        glyph::LINK_OFF,
+                        16.0,
+                        pal.red_disconnect.gamma_multiply(d_alpha),
+                    );
+                    if is_connected && d_resp.clicked() {
+                        core.lock().unwrap().send_ipc(IpcCommand::DisconnectDevice);
+                    }
                 }
             });
         });

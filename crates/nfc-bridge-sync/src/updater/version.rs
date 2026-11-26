@@ -1,11 +1,37 @@
 use super::models::{GhAsset, GhRelease, ReleaseAssetMatch};
 
+fn current_host_arch_token() -> &'static str {
+    if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else if cfg!(target_arch = "x86") {
+        "x86"
+    } else {
+        "x64"
+    }
+}
+
+fn asset_matches_arch_preference(name_lower: &str, arch_token: &str) -> u8 {
+    let mentions_other = (arch_token != "x64" && name_lower.contains("x64"))
+        || (arch_token != "x86" && name_lower.contains("x86"))
+        || (arch_token != "arm64" && name_lower.contains("arm64"));
+    if name_lower.contains(arch_token) {
+        3
+    } else if name_lower.contains("universal") {
+        2
+    } else if !mentions_other {
+        1
+    } else {
+        0
+    }
+}
+
 pub(crate) fn find_best_release_match(
     releases: &[GhRelease],
     asset_prefix: &str,
     prefer_portable_zip: bool,
 ) -> Option<ReleaseAssetMatch> {
     let prefix_lower = asset_prefix.to_ascii_lowercase();
+    let arch_tok = current_host_arch_token();
     let mut best: Option<ReleaseAssetMatch> = None;
 
     for rel in releases {
@@ -17,34 +43,38 @@ pub(crate) fn find_best_release_match(
             .iter()
             .filter(|a| {
                 let l = a.name.to_ascii_lowercase();
-                l.starts_with(&prefix_lower) && (l.ends_with(".zip") || l.ends_with(".exe"))
+                l.starts_with(&prefix_lower)
+                    && (l.ends_with(".zip") || l.ends_with(".exe"))
+                    && asset_matches_arch_preference(&l, arch_tok) > 0
             })
             .collect();
         if candidates.is_empty() {
             continue;
         }
 
-        let chosen = if prefer_portable_zip {
-            candidates
-                .iter()
-                .find(|a| {
-                    let l = a.name.to_ascii_lowercase();
-                    l.contains("portable") && l.ends_with(".zip")
-                })
-                .or_else(|| candidates.iter().find(|a| a.name.to_ascii_lowercase().ends_with(".zip")))
-                .or_else(|| candidates.first())
-                .copied()?
-        } else {
-            candidates
-                .iter()
-                .find(|a| {
-                    let l = a.name.to_ascii_lowercase();
-                    (l.contains("setup") || l.contains("installer")) && l.ends_with(".exe")
-                })
-                .or_else(|| candidates.iter().find(|a| a.name.to_ascii_lowercase().ends_with(".exe")))
-                .or_else(|| candidates.first())
-                .copied()?
-        };
+        let chosen = candidates
+            .iter()
+            .max_by_key(|a| {
+                let l = a.name.to_ascii_lowercase();
+                let kind_score = if prefer_portable_zip {
+                    if l.contains("portable") && l.ends_with(".zip") {
+                        3u8
+                    } else if l.ends_with(".zip") {
+                        2u8
+                    } else {
+                        1u8
+                    }
+                } else if (l.contains("setup") || l.contains("installer")) && l.ends_with(".exe") {
+                    3u8
+                } else if l.ends_with(".exe") {
+                    2u8
+                } else {
+                    1u8
+                };
+                let arch_score = asset_matches_arch_preference(&l, arch_tok);
+                (kind_score, arch_score)
+            })
+            .copied()?;
 
         let ver = extract_semver_from_names(&chosen.name, &rel.tag_name)?;
         let candidate = ReleaseAssetMatch {
@@ -168,5 +198,54 @@ mod tests {
             tools_setup.asset_name,
             "nfc-bridge-tools-0.2.0-windows-x64-portable.zip"
         );
+    }
+
+    #[test]
+    fn test_driver_arch_and_universal_matching() {
+        assert_eq!(
+            asset_matches_arch_preference("nfc-bridge-driver-0.2.0-windows-x86-setup.exe", "x86"),
+            3
+        );
+        assert_eq!(
+            asset_matches_arch_preference(
+                "nfc-bridge-driver-0.2.0-windows-universal-setup.exe",
+                "x86"
+            ),
+            2
+        );
+        assert_eq!(
+            asset_matches_arch_preference("nfc-bridge-driver-0.2.0-windows-arm64-setup.exe", "x64"),
+            0
+        );
+
+        let only_uni_and_other = vec![GhRelease {
+            tag_name: "v0.2.1".to_string(),
+            draft: false,
+            assets: vec![
+                GhAsset {
+                    name: "nfc-bridge-driver-0.2.1-windows-arm64-setup.exe".to_string(),
+                    browser_download_url: "https://example.com/drv-arm64.exe".to_string(),
+                    size: 100,
+                },
+                GhAsset {
+                    name: "nfc-bridge-driver-0.2.1-windows-universal-setup.exe".to_string(),
+                    browser_download_url: "https://example.com/drv-uni.exe".to_string(),
+                    size: 300,
+                },
+            ],
+        }];
+        let picked = find_best_release_match(&only_uni_and_other, "nfc-bridge-driver-", false)
+            .expect("should pick universal or host asset");
+        if current_host_arch_token() == "arm64" {
+            assert_eq!(
+                picked.asset_name,
+                "nfc-bridge-driver-0.2.1-windows-arm64-setup.exe"
+            );
+        } else {
+            assert_eq!(
+                picked.asset_name,
+                "nfc-bridge-driver-0.2.1-windows-universal-setup.exe"
+            );
+        }
     }
 }
