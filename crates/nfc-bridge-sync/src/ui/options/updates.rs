@@ -36,6 +36,7 @@ pub(crate) fn render_opt_updates(
         missing_badge,
         stopped_badge,
         start_drv_lbl,
+        default_app_name,
     ) = {
         let g = core.lock().unwrap();
         let u = g.updates.clone();
@@ -70,6 +71,7 @@ pub(crate) fn render_opt_updates(
             g.t("driver_badge_missing").to_string(),
             g.t("driver_badge_stopped").to_string(),
             g.t("settings_btn_start_driver").to_string(),
+            g.app_display_name(),
         )
     };
 
@@ -147,7 +149,7 @@ pub(crate) fn render_opt_updates(
 
             ui.horizontal(|ui| {
                 let app_name = if upd.app_display_name.is_empty() {
-                    "NFC Bridge Sync"
+                    &default_app_name
                 } else {
                     &upd.app_display_name
                 };
@@ -346,9 +348,28 @@ fn translate_upd_msg(g: &SharedUiCore, is_app: bool, u: &UpdatesOverviewState) -
     } else {
         u.driver_version.clone()
     };
+    let raw_msg = if is_app {
+        u.app_message.as_str()
+    } else {
+        u.driver_message.as_str()
+    };
     match status.as_str() {
         "checking" => g.t("upd_checking").to_string(),
         "not_installed" => g.t("upd_driver_not_installed").to_string(),
+        "installed_external" => avail
+            .as_ref()
+            .map(|a| g.t_vars("upd_installer_started", &[("ver", &a.version)]))
+            .unwrap_or_else(|| g.t_vars("upd_installer_started", &[("ver", "")])),
+        "installed" => avail
+            .as_ref()
+            .map(|a| g.t_vars("upd_driver_installed", &[("ver", &a.version)]))
+            .unwrap_or_else(|| g.t_vars("upd_driver_installed", &[("ver", "")])),
+        "error" => {
+            let err_part = raw_msg
+                .strip_prefix("No se pudo verificar: ")
+                .unwrap_or(raw_msg);
+            g.t_vars("upd_error", &[("err", err_part)])
+        }
         "up_to_date" => {
             if !is_app && !g.live.driver_installed {
                 g.t("upd_driver_not_installed").to_string()
@@ -383,8 +404,9 @@ fn translate_upd_msg(g: &SharedUiCore, is_app: bool, u: &UpdatesOverviewState) -
             .unwrap_or_else(|| g.t("upd_idle").to_string()),
         "no_releases" => {
             if is_app {
+                let fallback_name = g.app_display_name();
                 let n = if u.app_display_name.is_empty() {
-                    "NFC Bridge Sync"
+                    &fallback_name
                 } else {
                     &u.app_display_name
                 };

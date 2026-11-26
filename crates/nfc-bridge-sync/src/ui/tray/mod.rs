@@ -361,9 +361,12 @@ pub(crate) fn render_tray_viewport(
                 egui::Frame::new()
                     .inner_margin(Margin::symmetric(8, 6))
                     .show(ui, |ui| {
-                        ui.horizontal_centered(|ui| {
-                            let (ic_r, _) =
-                                ui.allocate_exact_size(Vec2::splat(38.0), Sense::hover());
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(ui.available_width(), 38.0),
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                let (ic_r, _) =
+                                    ui.allocate_exact_size(Vec2::splat(38.0), Sense::hover());
                             let (ic_bg, ic_bd, ic_fg) = if connected {
                                 (pal.accent_soft, pal.accent_border, pal.accent)
                             } else {
@@ -652,7 +655,9 @@ pub(crate) fn render_tray_viewport(
                 }
             });
 
-            let measured_h = (content_resp.response.rect.height() + 15.0).ceil();
+            let measured_h = (content_resp.response.rect.height() + 15.0)
+                .ceil()
+                .clamp(220.0, 560.0);
             let cur_h = ctx.input(|i| {
                 i.viewport()
                     .inner_rect
@@ -968,7 +973,9 @@ pub(crate) fn render_tray_sub_viewport(
                 }
             });
 
-            let measured_h = (content_resp.response.rect.height() + 15.0).ceil();
+            let measured_h = (content_resp.response.rect.height() + 15.0)
+                .ceil()
+                .clamp(48.0, 320.0);
             let cur_h = ctx.input(|i| {
                 i.viewport()
                     .inner_rect
