@@ -150,6 +150,36 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
     .animate-spin-once {
       animation: spinOnce 0.55s cubic-bezier(0.22, 1, 0.36, 1);
     }
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--nb-outline-variant) transparent;
+    }
+    *::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    *::-webkit-scrollbar-track {
+      background: transparent;
+      margin: 4px 0;
+    }
+    *::-webkit-scrollbar-thumb {
+      background-color: var(--nb-outline-variant);
+      border-radius: 9999px;
+      border: 1px solid transparent;
+      background-clip: content-box;
+      transition: background-color 150ms ease;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background-color: rgb(var(--nb-accent-rgb) / 0.72);
+    }
+    *::-webkit-scrollbar-button {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    *::-webkit-scrollbar-corner {
+      background: transparent;
+    }
   </style>
 </head>
 <body class="text-dark-on-surface antialiased selection:bg-electric-blue-soft selection:text-on-electric-blue-soft inline-block">
@@ -569,9 +599,9 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
     </main>
   </div>
 
-  <!-- MODAL DE OPCIONES DE SYNC (Apariencia, Red Local TCP y Confirmación desde Android) -->
+  <!-- MODAL DE OPCIONES CON BARRA LATERAL POR CATEGORÍAS -->
   <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
-    <div class="w-full max-w-[480px] bg-dark-surface-card border border-dark-outline rounded-md shadow-2xl overflow-hidden flex flex-col">
+    <div class="w-full max-w-[680px] bg-dark-surface-card border border-dark-outline rounded-md shadow-2xl overflow-hidden flex flex-col">
       <div class="px-gutter-lg py-gutter-md border-b border-dark-outline flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-electric-blue text-title-lg" aria-hidden="true">tune</span>
@@ -582,164 +612,192 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         </button>
       </div>
 
-      <div class="p-gutter-lg flex flex-col gap-gutter-lg max-h-[75vh] overflow-y-auto">
-        <!-- 1. Apariencia -->
-        <section class="flex flex-col gap-gutter-sm">
-          <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Apariencia</span>
+      <div class="grid grid-cols-[192px_1fr] h-[400px] max-h-[76vh]">
+        <!-- Barra lateral de categorías -->
+        <aside class="bg-dark-surface border-r border-dark-outline p-2.5 flex flex-col gap-1 overflow-y-auto" aria-label="Categorías de opciones">
+          <button type="button" data-settings-tab="appearance" class="settings-nav-btn w-full px-3 py-2 rounded-sm flex items-center gap-2.5 text-left font-label text-label-md transition-colors">
+            <span class="material-symbols-outlined text-[18px] shrink-0" aria-hidden="true">palette</span>
+            <span class="truncate">Apariencia</span>
+          </button>
+          <button type="button" data-settings-tab="network" class="settings-nav-btn w-full px-3 py-2 rounded-sm flex items-center gap-2.5 text-left font-label text-label-md transition-colors">
+            <span class="material-symbols-outlined text-[18px] shrink-0" aria-hidden="true">lan</span>
+            <span class="truncate">Conexión y red</span>
+          </button>
+          <button type="button" data-settings-tab="updates" class="settings-nav-btn w-full px-3 py-2 rounded-sm flex items-center justify-between gap-2 text-left font-label text-label-md transition-colors">
+            <span class="inline-flex items-center gap-2.5 min-w-0">
+              <span class="material-symbols-outlined text-[18px] shrink-0" aria-hidden="true">system_update_alt</span>
+              <span class="truncate">Actualizaciones</span>
+            </span>
+            <span id="settings-nav-update-dot" class="hidden w-2 h-2 rounded-full bg-electric-blue shrink-0"></span>
+          </button>
+          <button type="button" data-settings-tab="about" class="settings-nav-btn w-full px-3 py-2 rounded-sm flex items-center gap-2.5 text-left font-label text-label-md transition-colors">
+            <span class="material-symbols-outlined text-[18px] shrink-0" aria-hidden="true">info</span>
+            <span class="truncate">Acerca de</span>
+          </button>
+        </aside>
 
-          <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-label text-label-lg text-dark-on-surface">Tema</span>
-              <div class="inline-flex rounded-sm bg-dark-surface border border-dark-outline p-0.5 gap-0.5">
-                <button type="button" data-theme-choice="dark" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Oscuro</button>
-                <button type="button" data-theme-choice="light" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Claro</button>
-                <button type="button" data-theme-choice="system" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Sistema</button>
-              </div>
-            </div>
+        <!-- Contenido de la categoría seleccionada -->
+        <div class="p-gutter-lg overflow-y-auto flex flex-col gap-gutter-md bg-dark-surface-card">
+          <!-- 1. Apariencia -->
+          <section id="settings-tab-appearance" class="settings-tab-panel flex flex-col gap-gutter-sm">
+            <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Apariencia</span>
 
-            <div class="h-px bg-dark-outline"></div>
-
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex flex-col">
-                <span class="font-label text-label-lg text-dark-on-surface">Color de acento de Windows</span>
-                <span class="font-body text-[11px] text-dark-on-surface-muted">Usa automáticamente el acento del sistema</span>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <span id="settings-win-accent-chip" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">
-                  <span id="settings-win-accent-dot" class="w-2.5 h-2.5 rounded-full bg-[#3B82F6]"></span>
-                  <span id="settings-win-accent-hex">#3B82F6</span>
-                </span>
-                <button id="btn-toggle-win-accent" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] transition-colors">Desactivado</button>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-label text-label-md text-dark-on-surface-muted">Color personalizado</span>
-              <div class="flex items-center gap-2">
-                <button type="button" data-accent-preset="#3B82F6" title="Azul" class="accent-preset-btn w-6 h-6 rounded-full bg-[#3B82F6] transition-transform hover:scale-105"></button>
-                <button type="button" data-accent-preset="#06B6D4" title="Cian" class="accent-preset-btn w-6 h-6 rounded-full bg-[#06B6D4] transition-transform hover:scale-105"></button>
-                <button type="button" data-accent-preset="#10B981" title="Esmeralda" class="accent-preset-btn w-6 h-6 rounded-full bg-[#10B981] transition-transform hover:scale-105"></button>
-                <button type="button" data-accent-preset="#8B5CF6" title="Violeta" class="accent-preset-btn w-6 h-6 rounded-full bg-[#8B5CF6] transition-transform hover:scale-105"></button>
-                <button type="button" data-accent-preset="#EC4899" title="Magenta" class="accent-preset-btn w-6 h-6 rounded-full bg-[#EC4899] transition-transform hover:scale-105"></button>
-                <button type="button" data-accent-preset="#F59E0B" title="Ámbar" class="accent-preset-btn w-6 h-6 rounded-full bg-[#F59E0B] transition-transform hover:scale-105"></button>
-                <button id="btn-open-custom-color" type="button" title="Elegir color personalizado" aria-label="Elegir color personalizado" class="w-7 h-7 rounded-full bg-dark-surface border border-dark-outline inline-flex items-center justify-center text-dark-on-surface hover:border-electric-blue transition-all">
-                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">colorize</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 2. Red Local TCP y Cambios desde Android -->
-        <section class="flex flex-col gap-gutter-sm">
-          <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Conexión y Red Local</span>
-
-          <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex flex-col">
-                <span class="font-label text-label-lg text-dark-on-surface">Aceptar cambios desde Android automáticamente</span>
-                <span class="font-body text-[11px] text-dark-on-surface-muted">Si está desactivado, Sync pedirá confirmación al cambiar de dispositivo desde el celular</span>
-              </div>
-              <button id="btn-toggle-auto-mobile-switch" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Desactivado</button>
-            </div>
-
-            <div class="h-px bg-dark-outline"></div>
-
-            <div class="grid grid-cols-[1.4fr_0.9fr] gap-gutter-sm">
-              <label class="flex flex-col gap-1">
-                <span class="font-label text-[11px] text-dark-on-surface-muted">IP manual (vacío = automática)</span>
-                <input id="settings-tcp-ip" type="text" placeholder="Ej. 192.168.15.3" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="font-label text-[11px] text-dark-on-surface-muted">Puerto TCP</span>
-                <input id="settings-tcp-port" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="45362" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
-              </label>
-            </div>
-
-            <div class="flex items-center justify-between gap-2">
-              <span id="settings-net-feedback" class="font-label text-[11px] text-dark-on-surface-muted"></span>
-              <div class="flex items-center gap-2 shrink-0">
-                <button id="btn-reset-tcp-net" type="button" class="h-8 px-3 rounded-sm bg-dark-surface border border-dark-outline font-label text-[11px] text-dark-on-surface-muted hover:text-dark-on-surface hover:border-electric-blue transition-colors">Restablecer por defecto</button>
-                <button id="btn-save-tcp-net" type="button" class="h-8 px-3 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] hover:opacity-95 transition-opacity">Guardar red</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 3. Actualizaciones (GitHub Releases: Programa actual + Driver) -->
-        <section class="flex flex-col gap-gutter-sm">
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Actualizaciones (GitHub)</span>
-            <button id="btn-check-updates" type="button" class="inline-flex items-center gap-1 font-label text-[11px] text-electric-blue hover:underline">
-              <span class="material-symbols-outlined text-[14px]" aria-hidden="true">refresh</span>
-              <span>Buscar actualizaciones</span>
-            </button>
-          </div>
-
-          <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
-            <!-- Programa desktop actual (Sync o Tools) -->
-            <div class="flex flex-col gap-2">
+            <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
               <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                  <span id="upd-app-title" class="font-label text-label-lg text-dark-on-surface truncate">NFC Bridge Sync</span>
-                  <span id="upd-app-mode-chip" class="px-1.5 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">Portable</span>
+                <span class="font-label text-label-lg text-dark-on-surface">Tema</span>
+                <div class="inline-flex rounded-sm bg-dark-surface border border-dark-outline p-0.5 gap-0.5">
+                  <button type="button" data-theme-choice="dark" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Oscuro</button>
+                  <button type="button" data-theme-choice="light" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Claro</button>
+                  <button type="button" data-theme-choice="system" class="theme-choice-btn px-2.5 py-1 rounded-sm font-label text-[11px] transition-colors">Sistema</button>
                 </div>
-                <button id="btn-toggle-auto-update-app" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Auto: Off</button>
               </div>
-              <div class="flex items-center justify-between gap-2">
-                <span id="upd-app-status-msg" class="font-body text-[11px] text-dark-on-surface-muted truncate">Sin comprobar aún</span>
-                <button id="btn-action-update-app" type="button" class="hidden h-7 px-2.5 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] shrink-0 hover:opacity-95 transition-opacity">Instalar</button>
-              </div>
-            </div>
 
-            <div class="h-px bg-dark-outline"></div>
+              <div class="h-px bg-dark-outline"></div>
 
-            <!-- Driver Virtual PC/SC -->
-            <div class="flex flex-col gap-2">
               <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                  <span class="font-label text-label-lg text-dark-on-surface truncate">NFC Bridge Driver</span>
-                  <span id="upd-driver-version-chip" class="px-1.5 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">--</span>
+                <div class="flex flex-col">
+                  <span class="font-label text-label-lg text-dark-on-surface">Color de acento de Windows</span>
+                  <span class="font-body text-[11px] text-dark-on-surface-muted">Usa automáticamente el acento del sistema</span>
                 </div>
-                <button id="btn-toggle-auto-update-driver" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Auto: Off</button>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span id="settings-win-accent-chip" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">
+                    <span id="settings-win-accent-dot" class="w-2.5 h-2.5 rounded-full bg-[#3B82F6]"></span>
+                    <span id="settings-win-accent-hex">#3B82F6</span>
+                  </span>
+                  <button id="btn-toggle-win-accent" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] transition-colors">Desactivado</button>
+                </div>
+              </div>
+
+              <div class="h-px bg-dark-outline"></div>
+
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-label text-label-md text-dark-on-surface-muted">Color personalizado</span>
+                <div class="flex items-center gap-2">
+                  <button type="button" data-accent-preset="#3B82F6" title="Azul" class="accent-preset-btn w-6 h-6 rounded-full bg-[#3B82F6] transition-transform hover:scale-105"></button>
+                  <button type="button" data-accent-preset="#06B6D4" title="Cian" class="accent-preset-btn w-6 h-6 rounded-full bg-[#06B6D4] transition-transform hover:scale-105"></button>
+                  <button type="button" data-accent-preset="#10B981" title="Esmeralda" class="accent-preset-btn w-6 h-6 rounded-full bg-[#10B981] transition-transform hover:scale-105"></button>
+                  <button type="button" data-accent-preset="#8B5CF6" title="Violeta" class="accent-preset-btn w-6 h-6 rounded-full bg-[#8B5CF6] transition-transform hover:scale-105"></button>
+                  <button type="button" data-accent-preset="#EC4899" title="Magenta" class="accent-preset-btn w-6 h-6 rounded-full bg-[#EC4899] transition-transform hover:scale-105"></button>
+                  <button type="button" data-accent-preset="#F59E0B" title="Ámbar" class="accent-preset-btn w-6 h-6 rounded-full bg-[#F59E0B] transition-transform hover:scale-105"></button>
+                  <button id="btn-open-custom-color" type="button" title="Elegir color personalizado" aria-label="Elegir color personalizado" class="w-7 h-7 rounded-full bg-dark-surface border border-dark-outline inline-flex items-center justify-center text-dark-on-surface hover:border-electric-blue transition-all">
+                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">colorize</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 2. Red Local TCP y Cambios desde Android -->
+          <section id="settings-tab-network" class="settings-tab-panel hidden flex flex-col gap-gutter-sm">
+            <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Conexión y Red Local</span>
+
+            <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex flex-col">
+                  <span class="font-label text-label-lg text-dark-on-surface">Aceptar cambios desde Android automáticamente</span>
+                  <span class="font-body text-[11px] text-dark-on-surface-muted">Si está desactivado, Sync pedirá confirmación al cambiar de dispositivo desde el celular</span>
+                </div>
+                <button id="btn-toggle-auto-mobile-switch" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Desactivado</button>
+              </div>
+
+              <div class="h-px bg-dark-outline"></div>
+
+              <div class="grid grid-cols-[1.4fr_0.9fr] gap-gutter-sm">
+                <label class="flex flex-col gap-1">
+                  <span class="font-label text-[11px] text-dark-on-surface-muted">IP manual (vacío = automática)</span>
+                  <input id="settings-tcp-ip" type="text" placeholder="Ej. 192.168.15.3" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
+                </label>
+                <label class="flex flex-col gap-1">
+                  <span class="font-label text-[11px] text-dark-on-surface-muted">Puerto TCP</span>
+                  <input id="settings-tcp-port" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="45362" class="h-8 bg-dark-surface border border-dark-outline rounded-sm px-2.5 font-mono text-mono-sm text-dark-on-surface focus:border-electric-blue focus:outline-none">
+                </label>
+              </div>
+
+              <div class="flex items-center justify-between gap-2">
+                <span id="settings-net-feedback" class="font-label text-[11px] text-dark-on-surface-muted"></span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button id="btn-reset-tcp-net" type="button" class="h-8 px-3 rounded-sm bg-dark-surface border border-dark-outline font-label text-[11px] text-dark-on-surface-muted hover:text-dark-on-surface hover:border-electric-blue transition-colors">Restablecer por defecto</button>
+                  <button id="btn-save-tcp-net" type="button" class="h-8 px-3 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] hover:opacity-95 transition-opacity">Guardar red</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 3. Actualizaciones (GitHub Releases: Programa actual + Driver) -->
+          <section id="settings-tab-updates" class="settings-tab-panel hidden flex flex-col gap-gutter-sm">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Actualizaciones (GitHub)</span>
+              <button id="btn-check-updates" type="button" class="inline-flex items-center gap-1 font-label text-[11px] text-electric-blue hover:underline">
+                <span class="material-symbols-outlined text-[14px]" aria-hidden="true">refresh</span>
+                <span>Buscar actualizaciones</span>
+              </button>
+            </div>
+
+            <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-gutter-md">
+              <!-- Programa desktop actual (Sync o Tools) -->
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span id="upd-app-title" class="font-label text-label-lg text-dark-on-surface truncate">NFC Bridge Sync</span>
+                    <span id="upd-app-mode-chip" class="px-1.5 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">Portable</span>
+                  </div>
+                  <button id="btn-toggle-auto-update-app" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Auto: Off</button>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span id="upd-app-status-msg" class="font-body text-[11px] text-dark-on-surface-muted truncate">Sin comprobar aún</span>
+                  <button id="btn-action-update-app" type="button" class="hidden h-7 px-2.5 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] shrink-0 hover:opacity-95 transition-opacity">Instalar</button>
+                </div>
+              </div>
+
+              <div class="h-px bg-dark-outline"></div>
+
+              <!-- Driver Virtual PC/SC -->
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="font-label text-label-lg text-dark-on-surface truncate">NFC Bridge Driver</span>
+                    <span id="upd-driver-version-chip" class="px-1.5 py-0.5 rounded-full bg-dark-surface border border-dark-outline font-mono text-[10px] text-dark-on-surface-muted">--</span>
+                  </div>
+                  <button id="btn-toggle-auto-update-driver" type="button" role="switch" aria-checked="false" class="h-7 px-2.5 rounded-sm border border-dark-outline font-label text-[11px] shrink-0 transition-colors">Auto: Off</button>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span id="upd-driver-status-msg" class="font-body text-[11px] text-dark-on-surface-muted truncate">Sin comprobar aún</span>
+                  <button id="btn-action-update-driver" type="button" class="hidden h-7 px-2.5 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] shrink-0 hover:opacity-95 transition-opacity">Actualizar driver</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 4. Acerca de (Versiones del programa y driver) -->
+          <section id="settings-tab-about" class="settings-tab-panel hidden flex flex-col gap-gutter-sm">
+            <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Acerca de</span>
+
+            <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <span id="about-app-name" class="font-label text-label-lg text-dark-on-surface">NFC Bridge Sync</span>
+                <span id="about-app-version" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">--</span>
+              </div>
+              <div class="h-px bg-dark-outline"></div>
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-label text-label-lg text-dark-on-surface">NFC Bridge Driver</span>
+                <span id="about-driver-version" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">--</span>
+              </div>
+              <div class="h-px bg-dark-outline"></div>
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-label text-[11px] text-dark-on-surface-muted">Modo de ejecución</span>
+                <span id="about-exec-mode" class="font-mono text-[11px] text-dark-on-surface-muted">--</span>
               </div>
               <div class="flex items-center justify-between gap-2">
-                <span id="upd-driver-status-msg" class="font-body text-[11px] text-dark-on-surface-muted truncate">Sin comprobar aún</span>
-                <button id="btn-action-update-driver" type="button" class="hidden h-7 px-2.5 rounded-sm bg-electric-blue text-on-electric-blue font-label text-[11px] shrink-0 hover:opacity-95 transition-opacity">Actualizar driver</button>
+                <span class="font-label text-[11px] text-dark-on-surface-muted">Estado del controlador</span>
+                <span id="about-driver-state" class="font-mono text-[11px] text-dark-on-surface-muted">--</span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-label text-[11px] text-dark-on-surface-muted">Protocolo</span>
+                <span class="font-mono text-[11px] text-dark-on-surface-muted">NFC Bridge v1.0 · TLS 1.3</span>
               </div>
             </div>
-          </div>
-        </section>
-
-        <!-- 4. Acerca de (Versiones del programa y driver) -->
-        <section class="flex flex-col gap-gutter-sm">
-          <span class="font-label text-label-md text-dark-on-surface-muted uppercase tracking-wider">Acerca de</span>
-
-          <div class="bg-dark-surface-elevated border border-dark-outline rounded-sm p-gutter-md flex flex-col gap-2.5">
-            <div class="flex items-center justify-between gap-2">
-              <span id="about-app-name" class="font-label text-label-lg text-dark-on-surface">NFC Bridge Sync</span>
-              <span id="about-app-version" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">--</span>
-            </div>
-            <div class="h-px bg-dark-outline"></div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-label text-label-lg text-dark-on-surface">NFC Bridge Driver</span>
-              <span id="about-driver-version" class="font-mono text-mono-sm text-dark-on-surface tabular-nums">--</span>
-            </div>
-            <div class="h-px bg-dark-outline"></div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-label text-[11px] text-dark-on-surface-muted">Modo de ejecución</span>
-              <span id="about-exec-mode" class="font-mono text-[11px] text-dark-on-surface-muted">--</span>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-label text-[11px] text-dark-on-surface-muted">Estado del controlador</span>
-              <span id="about-driver-state" class="font-mono text-[11px] text-dark-on-surface-muted">--</span>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-label text-[11px] text-dark-on-surface-muted">Protocolo</span>
-              <span class="font-mono text-[11px] text-dark-on-surface-muted">NFC Bridge v1.0 · TLS 1.3</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
   </div>
@@ -1755,8 +1813,15 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
               const hdrTitle = document.getElementById('header-app-title');
               if (hdrTitle && upd.app_display_name) hdrTitle.textContent = upd.app_display_name;
               const settingsBadge = document.getElementById('btn-open-settings-badge');
+              const navUpdateDot = document.getElementById('settings-nav-update-dot');
               const hasAnyUpdate = upd.app_status === 'available' || upd.app_status === 'installed_restart' || upd.driver_status === 'available';
               if (settingsBadge) settingsBadge.classList.toggle('hidden', !hasAnyUpdate);
+              if (navUpdateDot) navUpdateDot.classList.toggle('hidden', !hasAnyUpdate);
+
+              const settingsModalTitle = document.getElementById('settings-modal-title');
+              if (settingsModalTitle) {
+                settingsModalTitle.textContent = upd.app_product === 'tools' ? 'Opciones de Tools' : 'Opciones de Sync';
+              }
 
               const updAppTitle = document.getElementById('upd-app-title');
               if (updAppTitle) updAppTitle.textContent = (upd.app_display_name || 'NFC Bridge Sync') + ' v' + (upd.app_version || '');
@@ -2161,7 +2226,30 @@ if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
         }).catch(function () {});
       }
 
+      let activeSettingsTab = 'appearance';
+      function setActiveSettingsTab(tabKey) {
+        activeSettingsTab = tabKey || 'appearance';
+        document.querySelectorAll('.settings-tab-panel').forEach(function (sec) {
+          const isMatch = sec.id === 'settings-tab-' + activeSettingsTab;
+          sec.classList.toggle('hidden', !isMatch);
+          sec.classList.toggle('flex', isMatch);
+        });
+        document.querySelectorAll('.settings-nav-btn').forEach(function (btn) {
+          const active = btn.getAttribute('data-settings-tab') === activeSettingsTab;
+          btn.className = active
+            ? 'settings-nav-btn w-full px-3 py-2 rounded-sm flex items-center justify-between gap-2 text-left font-label text-label-md bg-electric-blue-soft border border-electric-blue-border text-on-electric-blue-soft transition-colors'
+            : 'settings-nav-btn w-full px-3 py-2 rounded-sm flex items-center justify-between gap-2 text-left font-label text-label-md text-dark-on-surface-muted hover:bg-dark-surface-elevated hover:text-dark-on-surface border border-transparent transition-colors';
+        });
+      }
+      document.querySelectorAll('.settings-nav-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          setActiveSettingsTab(btn.getAttribute('data-settings-tab'));
+        });
+      });
+      setActiveSettingsTab('appearance');
+
       document.getElementById('btn-open-settings').addEventListener('click', function () {
+        setActiveSettingsTab(activeSettingsTab);
         settingsModal.classList.remove('hidden');
         refreshState();
       });
