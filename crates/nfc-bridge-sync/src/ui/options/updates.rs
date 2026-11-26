@@ -72,7 +72,7 @@ pub(crate) fn render_opt_updates(
         let w = gal.size().x + 17.0;
         let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 22.0), Sense::click());
         let ang = if spin_active {
-            ui.ctx().request_repaint();
+            ui.ctx().request_repaint_after(Duration::from_millis(16));
             (ui.input(|i| i.time) * 6.5) as f32
         } else {
             0.0

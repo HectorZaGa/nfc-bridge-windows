@@ -153,9 +153,28 @@ fn emit_win32_exe_resources(spec: &Win32ResourceSpec<'_>) {
     let desc = spec.desc;
     let orig_name = spec.orig_name;
 
+    let mut manifest_rc_line = String::new();
+    if bin_name == "nfc-bridge-installer" && title.contains("Driver") {
+        let manifest_path = out_dir.join("app.manifest");
+        let manifest_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>
+"#;
+        if std::fs::write(&manifest_path, manifest_xml).is_ok() {
+            manifest_rc_line = "1 24 \"app.manifest\"\n".to_string();
+        }
+    }
+
     let rc_content = format!(
         r#"1 ICON "app.ico"
-{tray_rc_line}1 VERSIONINFO
+{tray_rc_line}{manifest_rc_line}1 VERSIONINFO
 FILEVERSION {v0},{v1},{v2},0
 PRODUCTVERSION {v0},{v1},{v2},0
 FILEFLAGSMASK 0x3fL

@@ -311,7 +311,10 @@ impl DesktopUpdater {
                 let extracted_exe = extract_exe_from_zip(&installer_path, &updates_dir.join("app_stage"))?;
                 launch_detached(&extracted_exe, &[])?;
             } else {
-                launch_detached(&installer_path, &["/UPDATE"])?;
+                launch_detached(
+                    &installer_path,
+                    &["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+                )?;
             }
             let mut st = self.state.write().await;
             st.app_status = "installed_external".to_string();
@@ -369,7 +372,10 @@ impl DesktopUpdater {
             if interactive {
                 launch_elevated_or_normal(&target_exe, &[])
             } else {
-                launch_elevated_or_normal(&target_exe, &["/UPDATE"])
+                launch_elevated_or_normal(
+                    &target_exe,
+                    &["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+                )
             }
         } else {
             launch_elevated_or_normal(&target_exe, &["--install-service"])

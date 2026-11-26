@@ -15,6 +15,7 @@ const PRODUCT_VERSION: &str = env!("NFC_INSTALLER_VERSION");
 #[derive(Clone, Copy)]
 struct ProductMeta {
     display_name: &'static str,
+    folder_name: &'static str,
     exe_filename: &'static str,
     reg_key_name: &'static str,
     service_driver: bool,
@@ -25,6 +26,7 @@ fn product_meta() -> ProductMeta {
     match PRODUCT_SLUG {
         "tools" => ProductMeta {
             display_name: "NFC Bridge Tools",
+            folder_name: "Bridge Tools",
             exe_filename: "NFC Bridge Tools.exe",
             reg_key_name: "NFCBridgeTools",
             service_driver: false,
@@ -32,6 +34,7 @@ fn product_meta() -> ProductMeta {
         },
         "driver" => ProductMeta {
             display_name: "NFC Bridge Driver",
+            folder_name: "Bridge Driver",
             exe_filename: "nfc-bridge-driver.exe",
             reg_key_name: "NFCBridgeDriver",
             service_driver: true,
@@ -39,6 +42,7 @@ fn product_meta() -> ProductMeta {
         },
         _ => ProductMeta {
             display_name: "NFC Bridge Sync",
+            folder_name: "Bridge Sync",
             exe_filename: "NFC Bridge Sync.exe",
             reg_key_name: "NFCBridgeSync",
             service_driver: false,
@@ -88,12 +92,12 @@ fn install_dir(meta: &ProductMeta) -> PathBuf {
         let base = std::env::var_os("ProgramFiles")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
-        base.join("NFC Bridge Driver")
+        base.join("NFC Bridge").join(meta.folder_name)
     } else {
         let base = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
-        base.join("Programs").join("NFC Bridge").join(meta.display_name)
+        base.join("Programs").join("NFC Bridge").join(meta.folder_name)
     }
 }
 
@@ -326,12 +330,17 @@ fn run_uninstall(meta: ProductMeta, silent: bool) -> Result<(), String> {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let uninstall = args.iter().any(|a| a.eq_ignore_ascii_case("--uninstall") || a.eq_ignore_ascii_case("/uninstall"));
-    let is_update = args.iter().any(|a| a.eq_ignore_ascii_case("/UPDATE") || a.eq_ignore_ascii_case("--update"));
+    let is_update = args.iter().any(|a| {
+        a.eq_ignore_ascii_case("/UPDATE")
+            || a.eq_ignore_ascii_case("--update")
+            || a.eq_ignore_ascii_case("/VERYSILENT")
+    });
     let silent = is_update
         || args.iter().any(|a| {
             a.eq_ignore_ascii_case("/S")
                 || a.eq_ignore_ascii_case("/SILENT")
                 || a.eq_ignore_ascii_case("--silent")
+                || a.eq_ignore_ascii_case("/SUPPRESSMSGBOXES")
         });
 
     let meta = product_meta();

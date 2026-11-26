@@ -136,7 +136,7 @@ pub fn run_desktop_ui(
         last_visuals_pal: None,
     }));
 
-    let native_options = eframe::NativeOptions {
+    let mut native_options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
             .with_title(app_title)
             .with_inner_size([860.0, 504.0])
@@ -146,6 +146,7 @@ pub fn run_desktop_ui(
             .with_icon(Arc::new(eframe_icon)),
         ..Default::default()
     };
+    native_options.glow_options.vsync = false;
 
     let tray_events: Arc<Mutex<Vec<TrayIconEvent>>> = Arc::new(Mutex::new(Vec::new()));
 
@@ -278,7 +279,6 @@ fn spawn_state_sync_loop(
 }
 
 pub(crate) fn repaint_open_viewports(ctx: &egui::Context, options_open: bool, tray_open: bool) {
-    ctx.request_repaint();
     ctx.request_repaint_of(ViewportId::ROOT);
     if options_open {
         ctx.request_repaint_of(ViewportId::from_hash_of("nb_options_viewport"));
