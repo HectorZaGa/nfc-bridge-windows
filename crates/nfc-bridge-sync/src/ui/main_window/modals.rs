@@ -97,7 +97,7 @@ pub(crate) fn render_body_modals(
                 egui::Frame::new()
                     .fill(pal.surface_card)
                     .stroke(Stroke::new(1.0, pal.outline))
-                    .corner_radius(CornerRadius::same(16))
+                    .corner_radius(CornerRadius::same(8))
                     .inner_margin(Margin::same(16))
                     .show(ui, |ui| {
                         ui.set_min_size(Vec2::new(358.0, 136.0));

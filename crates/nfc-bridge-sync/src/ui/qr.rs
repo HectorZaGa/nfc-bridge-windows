@@ -15,7 +15,7 @@ pub fn paint_qr_box(
     let code = QrCode::with_error_correction_level(payload.as_bytes(), EcLevel::M)
         .map_err(|e| e.to_string())?;
 
-    painter.rect_filled(box_rect, CornerRadius::same(12), Color32::WHITE);
+    painter.rect_filled(box_rect, CornerRadius::same(8), Color32::WHITE);
 
     let width = code.width();
     let colors = code.to_colors();

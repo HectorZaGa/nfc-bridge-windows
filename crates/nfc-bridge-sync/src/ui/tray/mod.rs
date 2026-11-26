@@ -198,7 +198,7 @@ pub(crate) fn render_tray_viewport(
                         let (ic_r, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
                         ui.painter().rect(
                             ic_r,
-                            CornerRadius::same(7),
+                            CornerRadius::same(8),
                             pal.accent_soft,
                             Stroke::new(1.0, pal.accent_border),
                             StrokeKind::Inside,
@@ -304,7 +304,7 @@ pub(crate) fn render_tray_viewport(
                     let inner = Rect::from_min_max(Pos2::new(r.left() + 26.0, r.top()), r.max);
                     if is_act || resp.hovered() {
                         ui.painter()
-                            .rect_filled(inner, CornerRadius::same(6), pal.surface_elevated);
+                            .rect_filled(inner, CornerRadius::same(8), pal.surface_elevated);
                     }
                     ui.painter().text(
                         Pos2::new(inner.left() + 8.0, inner.center().y),
@@ -537,7 +537,7 @@ fn tray_menu_item(
     if resp.hovered() {
         ui.painter().rect_filled(
             r,
-            CornerRadius::same(7),
+            CornerRadius::same(8),
             if danger_hover {
                 pal.red_soft
             } else {

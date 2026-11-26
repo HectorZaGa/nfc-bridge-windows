@@ -166,7 +166,7 @@ pub(crate) fn render_left_column(
     let card_resp = egui::Frame::new()
         .fill(pal.surface_card)
         .stroke(Stroke::new(1.0, pal.outline))
-        .corner_radius(CornerRadius::same(16))
+        .corner_radius(CornerRadius::same(8))
         .inner_margin(Margin::same(6))
         .show(ui, |ui| {
             let full_w = ui.available_width();
@@ -263,7 +263,7 @@ pub(crate) fn render_left_column(
                     };
                     ui.painter().rect(
                         cap,
-                        CornerRadius::same(10),
+                        CornerRadius::same(8),
                         cap_bg,
                         Stroke::new(1.0, cap_stroke),
                         StrokeKind::Inside,

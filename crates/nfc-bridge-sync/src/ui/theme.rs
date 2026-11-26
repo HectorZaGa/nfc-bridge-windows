@@ -227,7 +227,7 @@ pub fn apply_egui_visuals(ctx: &egui::Context, pal: &ThemePalette) {
     visuals.override_text_color = Some(pal.on_surface);
     visuals.selection.bg_fill = pal.accent_soft;
     visuals.selection.stroke = Stroke::new(1.0, pal.accent);
-    visuals.window_corner_radius = CornerRadius::same(12);
+    visuals.window_corner_radius = CornerRadius::same(8);
     visuals.window_stroke = Stroke::new(1.0, pal.outline);
 
     visuals.widgets.noninteractive.bg_fill = pal.surface_card;

@@ -45,7 +45,7 @@ pub(crate) fn render_hsv_color_popover(
             egui::Frame::new()
                 .fill(pal.surface_card)
                 .stroke(Stroke::new(1.0, pal.outline_variant))
-                .corner_radius(CornerRadius::same(14))
+                .corner_radius(CornerRadius::same(8))
                 .inner_margin(Margin::same(14))
                 .show(ui, |ui| {
                     ui.set_width(282.0);

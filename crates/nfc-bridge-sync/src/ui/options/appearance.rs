@@ -93,7 +93,7 @@ pub(crate) fn render_opt_appearance(
                                     if active {
                                         ui.painter().rect_filled(
                                             r,
-                                            CornerRadius::same(6),
+                                            CornerRadius::same(8),
                                             pal.accent,
                                         );
                                     }
@@ -207,13 +207,13 @@ pub(crate) fn render_opt_appearance(
                                     if is_sel {
                                         ui.painter().rect_filled(
                                             r,
-                                            CornerRadius::same(6),
+                                            CornerRadius::same(8),
                                             pal.accent_soft,
                                         );
                                     } else if resp.hovered() {
                                         ui.painter().rect_filled(
                                             r,
-                                            CornerRadius::same(6),
+                                            CornerRadius::same(8),
                                             pal.surface_elevated,
                                         );
                                     }

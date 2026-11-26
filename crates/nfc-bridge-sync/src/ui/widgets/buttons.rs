@@ -221,7 +221,7 @@ pub(crate) fn small_ghost_btn(
     let (r, resp) = ui.allocate_exact_size(Vec2::new(w, 28.0), Sense::click());
     if resp.hovered() {
         ui.painter()
-            .rect_filled(r, CornerRadius::same(6), pal.surface_elevated);
+            .rect_filled(r, CornerRadius::same(8), pal.surface_elevated);
     }
     paint_glyph(
         ui.painter(),

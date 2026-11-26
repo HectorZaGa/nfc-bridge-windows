@@ -67,7 +67,7 @@ pub(crate) fn render_device_dropdown_overlay(
             egui::Frame::new()
                 .fill(pal.surface_card)
                 .stroke(Stroke::new(1.0, pal.outline))
-                .corner_radius(CornerRadius::same(16))
+                .corner_radius(CornerRadius::same(8))
                 .inner_margin(Margin::same(6))
                 .shadow(egui::Shadow {
                     offset: [0, 8],

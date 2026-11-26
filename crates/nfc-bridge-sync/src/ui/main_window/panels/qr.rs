@@ -73,7 +73,7 @@ pub(crate) fn render_qr_panel(
         let (qr_rect, _) = ui.allocate_exact_size(Vec2::splat(192.0), Sense::hover());
         if loading {
             ui.painter()
-                .rect_filled(qr_rect, CornerRadius::same(12), Color32::WHITE);
+                .rect_filled(qr_rect, CornerRadius::same(8), Color32::WHITE);
             ui.painter().text(
                 qr_rect.center(),
                 egui::Align2::CENTER_CENTER,
@@ -83,7 +83,7 @@ pub(crate) fn render_qr_panel(
             );
         } else if let Some(ref e) = err {
             ui.painter()
-                .rect_filled(qr_rect, CornerRadius::same(12), Color32::WHITE);
+                .rect_filled(qr_rect, CornerRadius::same(8), Color32::WHITE);
             ui.painter().text(
                 qr_rect.center(),
                 egui::Align2::CENTER_CENTER,
