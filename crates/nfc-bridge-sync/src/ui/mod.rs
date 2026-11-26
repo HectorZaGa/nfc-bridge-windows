@@ -91,9 +91,13 @@ pub fn run_desktop_ui(
         options_just_opened: false,
         options_want_focus: false,
         tray_open: false,
+        tray_want_focus: false,
+        tray_saw_focus: false,
         tray_opened_at: None,
+        tray_closed_at: None,
         tray_pos: None,
         tray_devices_expanded: false,
+        tray_measured_height: None,
         should_quit: false,
         active_panel: "usb".to_string(),
         qr_method: None,
@@ -330,13 +334,19 @@ impl eframe::App for NfcBridgeEguiApp {
                     MouseButton::Right => {
                         if g.tray_open {
                             g.tray_open = false;
-                        } else {
+                            g.tray_closed_at = Some(Instant::now());
+                        } else if g
+                            .tray_closed_at
+                            .is_none_or(|t| t.elapsed() > Duration::from_millis(180))
+                        {
                             let ppp = ctx.pixels_per_point().max(1.0);
                             g.tray_pos = Some(Pos2::new(
                                 (position.x as f32) / ppp,
                                 (position.y as f32) / ppp,
                             ));
                             g.tray_open = true;
+                            g.tray_want_focus = true;
+                            g.tray_saw_focus = false;
                             g.tray_opened_at = Some(Instant::now());
                         }
                     }
@@ -361,6 +371,7 @@ impl eframe::App for NfcBridgeEguiApp {
             pal,
             options_open,
             tray_open,
+            tray_want_focus,
             tray_pos,
             tray_h,
             should_quit,
@@ -368,6 +379,10 @@ impl eframe::App for NfcBridgeEguiApp {
             needs_visuals,
         ) = {
             let mut g = self.core.lock().unwrap();
+            if g.should_quit {
+                g.tray_open = false;
+                g.options_open = false;
+            }
             let pal = g.palette();
             let need_vis = g.last_visuals_pal != Some(pal);
             if need_vis {
@@ -383,6 +398,9 @@ impl eframe::App for NfcBridgeEguiApp {
             let wf = g.main_want_focus;
             g.main_want_focus = false;
 
+            let twf = g.tray_want_focus;
+            g.tray_want_focus = false;
+
             let th = estimate_tray_height(&g);
             (
                 wf,
@@ -390,6 +408,7 @@ impl eframe::App for NfcBridgeEguiApp {
                 pal,
                 g.options_open,
                 g.tray_open,
+                twf,
                 g.tray_pos,
                 th,
                 g.should_quit,
@@ -404,6 +423,7 @@ impl eframe::App for NfcBridgeEguiApp {
 
         if should_quit {
             ctx.send_viewport_cmd(ViewportCommand::Close);
+            ctx.request_repaint_of(ViewportId::ROOT);
             return;
         }
 
@@ -449,6 +469,10 @@ impl eframe::App for NfcBridgeEguiApp {
             ctx.show_viewport_deferred(tray_id, vb, move |ui, _class| {
                 render_tray_viewport(&core_tray, &tray_title, ui);
             });
+            if tray_want_focus {
+                ctx.send_viewport_cmd_to(tray_id, ViewportCommand::Visible(true));
+                ctx.send_viewport_cmd_to(tray_id, ViewportCommand::Focus);
+            }
         }
     }
 

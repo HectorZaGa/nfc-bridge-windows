@@ -14,10 +14,15 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub(crate) fn estimate_tray_height(g: &SharedUiCore) -> f32 {
-    let base = 368.0_f32;
+    let dev_count = g.live.snapshot.trusted_devices.len().min(4);
+    if let Some((exp, cnt, measured)) = g.tray_measured_height {
+        if exp == g.tray_devices_expanded && cnt == dev_count {
+            return measured;
+        }
+    }
+    let base = 336.0_f32;
     if g.tray_devices_expanded {
-        let count = g.live.snapshot.trusted_devices.len().clamp(1, 4) as f32;
-        base + count * 30.0 + 6.0
+        base + (dev_count as f32) * 30.0
     } else {
         base
     }
@@ -30,19 +35,26 @@ pub(crate) fn render_tray_viewport(
 ) {
     let ctx = ui.ctx().clone();
     let focused = ctx.input(|i| i.viewport().focused);
+    let esc_pressed = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+    let close_req = ctx.input(|i| i.viewport().close_requested());
+    let mut closing_now = false;
     {
         let mut g = core.lock().unwrap();
-        if focused == Some(false)
-            && g.tray_opened_at
-                .is_some_and(|t| t.elapsed() > Duration::from_millis(250))
-        {
-            g.tray_open = false;
-            return;
+        if focused == Some(true) {
+            g.tray_saw_focus = true;
         }
-        if ctx.input(|i| i.viewport().close_requested()) {
+        let lost_focus = focused == Some(false)
+            && (g.tray_saw_focus
+                || g.tray_opened_at
+                    .is_some_and(|t| t.elapsed() > Duration::from_millis(250)));
+        if lost_focus || esc_pressed || close_req || g.should_quit {
             g.tray_open = false;
-            return;
+            g.tray_closed_at = Some(std::time::Instant::now());
+            closing_now = true;
         }
+    }
+    if closing_now {
+        ctx.request_repaint_of(egui::ViewportId::ROOT);
     }
 
     let (
@@ -135,6 +147,7 @@ pub(crate) fn render_tray_viewport(
         )
     };
 
+    let dev_count = devices.len().min(4);
     egui::Frame::new()
         .fill(pal.surface_card)
         .stroke(Stroke::new(1.0, pal.outline))
@@ -142,10 +155,12 @@ pub(crate) fn render_tray_viewport(
         .show(ui, |ui| {
             ui.set_min_size(ui.available_size());
             ui.spacing_mut().item_spacing = Vec2::new(0.0, 2.0);
+            let content_resp = ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(0.0, 2.0);
 
-            egui::Frame::new()
-                .inner_margin(Margin::symmetric(8, 6))
-                .show(ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(Margin::symmetric(8, 6))
+                    .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         let (ic_r, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
                         ui.painter().rect(
@@ -200,11 +215,15 @@ pub(crate) fn render_tray_viewport(
                 true,
                 None,
                 false,
-            ) {
+            ) && !closing_now
+            {
                 let mut g = core.lock().unwrap();
                 g.tray_open = false;
+                g.tray_closed_at = Some(std::time::Instant::now());
                 g.main_visible = true;
                 g.main_want_focus = true;
+                drop(g);
+                ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
 
             let chev_ic = if dev_expanded {
@@ -222,9 +241,12 @@ pub(crate) fn render_tray_viewport(
                 false,
                 Some((chev_ic, pal.on_surface_muted)),
                 false,
-            ) {
+            ) && !closing_now
+            {
                 let mut g = core.lock().unwrap();
                 g.tray_devices_expanded = !g.tray_devices_expanded;
+                drop(g);
+                ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
             if dev_expanded {
                 for dev in devices.iter().take(4) {
@@ -281,14 +303,17 @@ pub(crate) fn render_tray_viewport(
                 false,
                 None,
                 false,
-            ) {
+            ) && !closing_now
+            {
                 let mut g = core.lock().unwrap();
                 g.tray_open = false;
+                g.tray_closed_at = Some(std::time::Instant::now());
                 g.main_visible = true;
                 g.main_want_focus = true;
                 g.active_panel = "tcp".to_string();
                 drop(g);
                 trigger_qr_request(core, &ctx, "tcp");
+                ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
 
             paint_divider(ui, &pal);
@@ -352,12 +377,16 @@ pub(crate) fn render_tray_viewport(
                 false,
                 None,
                 false,
-            ) {
+            ) && !closing_now
+            {
                 let mut g = core.lock().unwrap();
                 g.tray_open = false;
+                g.tray_closed_at = Some(std::time::Instant::now());
                 g.options_open = true;
                 g.options_just_opened = true;
                 g.options_want_focus = true;
+                drop(g);
+                ctx.request_repaint_of(egui::ViewportId::ROOT);
             }
 
             let disc_col = if connected {
@@ -376,6 +405,7 @@ pub(crate) fn render_tray_viewport(
                 None,
                 true,
             ) && connected
+                && !closing_now
             {
                 core.lock().unwrap().send_ipc(IpcCommand::DisconnectDevice);
             }
@@ -390,10 +420,34 @@ pub(crate) fn render_tray_viewport(
                 false,
                 None,
                 true,
-            ) {
+            ) && !closing_now
+            {
                 let mut g = core.lock().unwrap();
                 g.tray_open = false;
+                g.options_open = false;
                 g.should_quit = true;
+                drop(g);
+                ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
+                ctx.request_repaint_of(egui::ViewportId::ROOT);
+            }
+            });
+
+            let measured_h = (content_resp.response.rect.height() + 12.0).ceil();
+            let cur_h = ctx.input(|i| {
+                i.viewport()
+                    .inner_rect
+                    .map(|r| r.height())
+                    .unwrap_or(0.0)
+            });
+            if measured_h > 100.0 && (cur_h - measured_h).abs() > 1.0 && !closing_now {
+                let mut g = core.lock().unwrap();
+                if g.tray_measured_height
+                    .is_none_or(|(e, c, h)| e != dev_expanded || c != dev_count || (h - measured_h).abs() > 1.0)
+                {
+                    g.tray_measured_height = Some((dev_expanded, dev_count, measured_h));
+                    drop(g);
+                    ctx.request_repaint_of(egui::ViewportId::ROOT);
+                }
             }
         });
 }

@@ -39,9 +39,13 @@ pub(crate) struct SharedUiCore {
     pub(crate) options_just_opened: bool,
     pub(crate) options_want_focus: bool,
     pub(crate) tray_open: bool,
+    pub(crate) tray_want_focus: bool,
+    pub(crate) tray_saw_focus: bool,
     pub(crate) tray_opened_at: Option<Instant>,
+    pub(crate) tray_closed_at: Option<Instant>,
     pub(crate) tray_pos: Option<Pos2>,
     pub(crate) tray_devices_expanded: bool,
+    pub(crate) tray_measured_height: Option<(bool, usize, f32)>,
     pub(crate) should_quit: bool,
 
     // Estado visual de la ventana principal

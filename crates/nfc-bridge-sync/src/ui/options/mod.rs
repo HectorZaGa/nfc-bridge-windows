@@ -165,10 +165,8 @@ pub(crate) fn render_options_viewport(
                         ui.set_clip_rect(sb_rect);
 
                         egui::Frame::new().inner_margin(Margin::same(8)).show(ui, |ui| {
-                            let tog_rect = Rect::from_min_size(
-                                ui.cursor().min,
-                                Vec2::new((sb_w - 16.0).max(36.0), 32.0),
-                            );
+                            let tog_rect =
+                                Rect::from_min_size(ui.cursor().min, Vec2::new(36.0, 32.0));
                             let tog_resp = ui.allocate_rect(tog_rect, Sense::click());
                             if tog_resp.hovered() {
                                 ui.painter().rect_filled(
@@ -179,7 +177,7 @@ pub(crate) fn render_options_viewport(
                             }
                             paint_glyph(
                                 ui.painter(),
-                                Pos2::new(tog_rect.left() + 18.0, tog_rect.center().y),
+                                tog_rect.center(),
                                 if compact_now {
                                     glyph::CHEVRON_RIGHT
                                 } else {
