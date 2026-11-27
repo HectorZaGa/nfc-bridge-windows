@@ -322,6 +322,7 @@ pub struct DesktopLiveState {
     pub windows_accent_hex: String,
     pub pending_mobile_switch: Option<PendingMobileSwitchState>,
     pub pending_invalid_pairing: Option<InvalidPairingNoticeState>,
+    pub invalid_pairing_queue: Vec<InvalidPairingNoticeState>,
     pub snapshot: TransportSnapshotData,
 }
 
@@ -355,6 +356,7 @@ impl Default for DesktopLiveState {
             windows_accent_hex: read_windows_accent_hex(),
             pending_mobile_switch: None,
             pending_invalid_pairing: None,
+            invalid_pairing_queue: Vec::new(),
             snapshot: TransportSnapshotData::default(),
         }
     }

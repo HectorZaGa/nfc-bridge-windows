@@ -112,9 +112,15 @@ pub(crate) fn render_qr_panel(
     }
 
     if let Some(ref qr) = qr_opt {
+        let now = Instant::now();
+        if now >= qr.expires_at && !loading {
+            trigger_qr_request(core, ui.ctx(), method);
+        } else {
+            ui.ctx().request_repaint_after(Duration::from_secs(1));
+        }
         let secs_left = qr
             .expires_at
-            .saturating_duration_since(Instant::now())
+            .saturating_duration_since(now)
             .as_secs();
         let countdown = format!("{}:{:02}", secs_left / 60, secs_left % 60);
 

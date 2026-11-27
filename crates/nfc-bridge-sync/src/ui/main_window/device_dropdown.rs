@@ -59,6 +59,12 @@ pub(crate) fn render_device_dropdown_overlay(
 
     let inner_w = (card_anchor_rect.width() - 14.0).max(220.0);
     let dd_pos = Pos2::new(card_anchor_rect.left(), card_anchor_rect.bottom() + 4.0);
+    let row_count = devices.len().max(1);
+    let row_h = 48.0;
+    let row_gap = 4.0;
+    let max_visible_h = 4.5 * row_h + 4.0 * row_gap;
+    let target_h = (row_count as f32 * row_h + (row_count.saturating_sub(1)) as f32 * row_gap)
+        .min(max_visible_h);
 
     let area_resp = egui::Area::new(Id::unique("nb_device_dropdown_area"))
         .order(egui::Order::Foreground)
@@ -79,8 +85,11 @@ pub(crate) fn render_device_dropdown_overlay(
                     ui.set_min_width(inner_w);
                     ui.set_max_width(inner_w);
                     egui::ScrollArea::vertical()
+                        .id_salt("nb_device_dd_scroll")
                         .max_width(inner_w)
-                        .max_height(240.0)
+                        .min_scrolled_height(target_h)
+                        .max_height(target_h)
+                        .auto_shrink([false, false])
                         .show(ui, |ui| {
                             ui.set_min_width(inner_w);
                             ui.set_max_width(inner_w);

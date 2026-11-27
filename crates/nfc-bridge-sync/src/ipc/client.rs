@@ -93,7 +93,11 @@ impl DriverIpcClient {
 
     pub async fn clear_invalid_pairing_notice(&self) {
         let mut st = self.state.write().await;
-        st.pending_invalid_pairing = None;
+        st.pending_invalid_pairing = if st.invalid_pairing_queue.is_empty() {
+            None
+        } else {
+            Some(st.invalid_pairing_queue.remove(0))
+        };
     }
 
     pub async fn select_saved_profile(&self, device_id: &str) {
@@ -537,14 +541,33 @@ impl DriverIpcClient {
                 transport,
                 reason,
             } => {
-                let mut st = self.state.write().await;
-                st.pending_invalid_pairing = Some(InvalidPairingNoticeState {
+                let notice = InvalidPairingNoticeState {
                     device_id,
                     device_name,
                     mobile_id,
                     transport,
                     reason,
-                });
+                };
+                let same_notice = |a: &InvalidPairingNoticeState, b: &InvalidPairingNoticeState| {
+                    if a.device_id.is_some() && a.device_id == b.device_id {
+                        return true;
+                    }
+                    a.device_id.is_none()
+                        && b.device_id.is_none()
+                        && a.device_name == b.device_name
+                        && a.transport == b.transport
+                        && a.reason == b.reason
+                };
+                let mut st = self.state.write().await;
+                if let Some(ref current) = st.pending_invalid_pairing {
+                    if !same_notice(current, &notice)
+                        && !st.invalid_pairing_queue.iter().any(|q| same_notice(q, &notice))
+                    {
+                        st.invalid_pairing_queue.push(notice);
+                    }
+                } else {
+                    st.pending_invalid_pairing = Some(notice);
+                }
             }
             IpcEvent::PairingTokenIssued {
                 method,

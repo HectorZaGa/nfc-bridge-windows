@@ -62,10 +62,18 @@ pub(crate) fn render_body_modals(
                 accept: g.t("modal_switch_accept").to_string(),
             })
         } else if let Some(ref inv) = g.live.pending_invalid_pairing {
+            let display_name = match inv.transport.as_deref() {
+                Some("tcp") => format!("{} (Wi-Fi)", inv.device_name),
+                Some("wifi_direct") => format!("{} (Wi-Fi Direct)", inv.device_name),
+                Some("bluetooth") => format!("{} (Bluetooth)", inv.device_name),
+                Some("relay") => format!("{} (Cloud Relay)", inv.device_name),
+                Some("usb") => format!("{} (USB)", inv.device_name),
+                _ => inv.device_name.clone(),
+            };
             Some(ActiveModal::InvalidPairing {
                 dev_id: inv.device_id.clone(),
                 title: g.t("modal_invalid_title").to_string(),
-                desc: g.t_vars("modal_invalid_desc", &[("name", &inv.device_name)]),
+                desc: g.t_vars("modal_invalid_desc", &[("name", &display_name)]),
                 keep: g.t("modal_invalid_keep").to_string(),
                 delete: g.t("modal_invalid_delete").to_string(),
             })
